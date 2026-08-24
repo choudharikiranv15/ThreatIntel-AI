@@ -1,13 +1,14 @@
 {
   "name": "threatintel-ai-engine",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Evidence-first CVE investigation tool for ThreatIntel AI on OpenClaw.",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "validate": "openclaw plugins validate --entry ./dist/index.js",
-    "test:cve": "node ./dist/test-golden.js"
+    "test:cve": "node ./dist/test-golden.js",
+    "check": "npm run build && npm run validate && npm run test:cve"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52",
