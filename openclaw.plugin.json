@@ -28,8 +28,7 @@
   "toolMetadata": {
     "threatintel_investigate": {
       "profiles": [
-        "coding",
-        "full"
+        "coding"
       ]
     }
   }
