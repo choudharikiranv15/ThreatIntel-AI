@@ -3,6 +3,7 @@
   "name": "ThreatIntel AI Engine",
   "description": "Evidence-first threat intelligence investigation tools. Currently supports CVE investigations using NVD and CISA KEV.",
   "version": "0.1.0",
+
   "configSchema": {
     "type": "object",
     "properties": {
@@ -17,12 +18,23 @@
       }
     }
   },
+
   "activation": {
     "onStartup": true
   },
+
   "contracts": {
     "tools": [
       "threatintel_investigate"
     ]
+  },
+
+  "toolMetadata": {
+    "threatintel_investigate": {
+      "profiles": [
+        "coding",
+        "full"
+      ]
+    }
   }
 }
