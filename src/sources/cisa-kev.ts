@@ -1,10 +1,4 @@
-export interface CisaKevResult {
-  source: "CISA KEV";
-  retrievedAt: string;
-  url: string;
-  title: string;
-  facts: Record<string, unknown>;
-}
+import type { Evidence } from "../types.js";
 
 interface CisaKevEntry {
   cveID?: string;
@@ -28,13 +22,13 @@ interface CisaKevCatalog {
   vulnerabilities?: CisaKevEntry[];
 }
 
-const KEV_URL =
+export const KEV_URL =
   "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json";
 
 export async function fetchCisaKev(
   cveId: string,
-  timeoutMs: number
-): Promise<CisaKevResult | null> {
+  timeoutMs: number,
+): Promise<Evidence | null> {
   const normalized =
     cveId.trim().toUpperCase();
 
@@ -46,17 +40,28 @@ export async function fetchCisaKev(
       headers: {
         Accept: "application/json",
         "User-Agent":
-          "ThreatIntel-AI-Engine/0.1.0"
+          "ThreatIntel-AI-Engine/0.2.0",
       },
 
-      signal:
-        AbortSignal.timeout(timeoutMs)
-    }
+      signal: AbortSignal.timeout(timeoutMs),
+    },
   );
 
   if (!response.ok) {
+    let body = "";
+
+    try {
+      body = await response.text();
+    } catch {
+      // Ignore response-body parsing failures.
+    }
+
+    const suffix = body
+      ? ` - ${body.slice(0, 300)}`
+      : "";
+
     throw new Error(
-      `CISA KEV request failed: HTTP ${response.status} ${response.statusText}`
+      `CISA KEV request failed: HTTP ${response.status} ${response.statusText}${suffix}`,
     );
   }
 
@@ -65,11 +70,11 @@ export async function fetchCisaKev(
 
   if (
     !Array.isArray(
-      catalog.vulnerabilities
+      catalog.vulnerabilities,
     )
   ) {
     throw new Error(
-      "CISA KEV response did not contain a vulnerabilities array."
+      "CISA KEV response did not contain a vulnerabilities array.",
     );
   }
 
@@ -77,9 +82,21 @@ export async function fetchCisaKev(
     catalog.vulnerabilities.find(
       (item) =>
         typeof item.cveID === "string" &&
-        item.cveID.toUpperCase() === normalized
+        item.cveID.toUpperCase() === normalized,
     );
 
+  /*
+   * IMPORTANT:
+   *
+   * null means:
+   *
+   * "CISA successfully checked the catalog,
+   * and the CVE was not present."
+   *
+   * It does NOT mean:
+   *
+   * "CISA failed."
+   */
   if (!entry) {
     return null;
   }
@@ -88,7 +105,7 @@ export async function fetchCisaKev(
     new Date().toISOString();
 
   return {
-    source: "CISA KEV",
+    source: "CISA_KEV",
 
     retrievedAt,
 
@@ -125,7 +142,7 @@ export async function fetchCisaKev(
         entry.knownRansomwareCampaignUse,
 
       notes:
-        entry.notes
-    }
+        entry.notes,
+    },
   };
 }
