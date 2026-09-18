@@ -1,12 +1,22 @@
-export type SourceId = "NVD" | "CISA_KEV";
+export type SourceId =
+  | "NVD"
+  | "CISA_KEV";
 
-export type Evidence = {
-  source: SourceId;
-  retrievedAt: string;
-  url: string;
-  title: string;
-  facts: Record<string, unknown>;
-};
+export type SourceType =
+  | "primary"
+  | "vendor"
+  | "community";
+
+export type EvidenceConfidence =
+  | "high"
+  | "medium"
+  | "low";
+
+export type ProviderStatus =
+  | "success"
+  | "observed_absence"
+  | "error"
+  | "timeout";
 
 export type KevStatus =
   | "listed"
@@ -26,11 +36,81 @@ export type CvssDetails = {
   severity: string | null;
 };
 
+export type EvidenceFact = {
+  claim: string;
+  field?: string;
+};
+
+export type EvidenceReference = {
+  title: string;
+  url: string;
+  retrieved: boolean;
+};
+
+export type Evidence = {
+  source: SourceId;
+
+  sourceType: SourceType;
+
+  retrievedAt: string;
+
+  url: string;
+
+  title: string;
+
+  confidence: EvidenceConfidence;
+
+  /**
+   * Facts directly extracted from this retrieved source.
+   */
+  facts: Record<string, unknown>;
+
+  /**
+   * Human-readable claims derived directly from facts.
+   *
+   * These are NOT LLM-generated.
+   */
+  extractedFacts: EvidenceFact[];
+
+  /**
+   * URLs/references discovered inside the source.
+   *
+   * retrieved=false means ThreatIntel AI has NOT independently
+   * retrieved or verified that source.
+   */
+  references: EvidenceReference[];
+};
+
+export type ProviderResult = {
+  provider: SourceId;
+
+  status: ProviderStatus;
+
+  /**
+   * Evidence returned when status === "success".
+   */
+  evidence: Evidence | null;
+
+  /**
+   * Error information when status === "error" or "timeout".
+   */
+  error: string | null;
+
+  /**
+   * Timestamp of the provider operation.
+   */
+  checkedAt: string;
+};
+
 export type InvestigationSummary = {
   severity: string | null;
+
   cvss: CvssDetails;
+
   kevStatus: KevStatus;
+
   cwe: string[];
+
   affectedVersions: string[];
 };
 
@@ -46,23 +126,34 @@ export type InvestigationResult = {
   summary: InvestigationSummary;
 
   /**
-   * Facts directly extracted from authoritative evidence.
+   * Facts directly supported by retrieved evidence.
    *
-   * These are NOT LLM-generated claims.
+   * The LLM MUST NOT add facts here.
    */
   confirmedFacts: string[];
 
   /**
    * Conservative analytical conclusions derived from confirmed facts.
    *
-   * These must never be presented as directly sourced facts.
+   * These are not source facts.
    */
   inferences: string[];
 
+  /**
+   * Directly retrieved evidence.
+   */
   evidence: Evidence[];
 
   /**
-   * Problems encountered while collecting evidence.
+   * Complete provider execution state.
+   *
+   * This prevents "not found", "not listed", and
+   * "provider failed" from being conflated.
+   */
+  providerResults: ProviderResult[];
+
+  /**
+   * Problems or scope limitations encountered.
    */
   limitations: string[];
 
