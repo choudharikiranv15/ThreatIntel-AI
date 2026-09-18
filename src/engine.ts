@@ -11,6 +11,7 @@ import type {
   InvestigationResult,
   KevStatus,
   CvssDetails,
+  ProviderResult,
 } from "./types.js";
 
 export interface InvestigationConfig {
@@ -747,6 +748,52 @@ function buildAnalystGuidance(
 }
 
 /* -------------------------------------------------------------------------- */
+/* Provider result helpers                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Converts a provider failure into an explicit investigation limitation.
+ *
+ * ProviderResult intentionally preserves the machine-readable state while
+ * this helper creates the human-readable explanation used by the report.
+ */
+function providerFailureLimitation(
+  result: ProviderResult,
+): string | null {
+  if (
+    result.status !== "error" &&
+    result.status !== "timeout"
+  ) {
+    return null;
+  }
+
+  const reason =
+    result.error ??
+    "Unknown provider error.";
+
+  if (result.status === "timeout") {
+    return `${result.provider} lookup timed out: ${reason}`;
+  }
+
+  return `${result.provider} lookup failed: ${reason}`;
+}
+
+/**
+ * Determines whether a provider completed its check successfully.
+ *
+ * Both "success" and "observed_absence" mean that the provider itself
+ * completed normally. "observed_absence" is therefore NOT a failure.
+ */
+function providerCheckCompleted(
+  result: ProviderResult,
+): boolean {
+  return (
+    result.status === "success" ||
+    result.status === "observed_absence"
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* Investigation                                                              */
 /* -------------------------------------------------------------------------- */
 
@@ -799,6 +846,8 @@ export async function investigateCve(
 
       evidence: [],
 
+      providerResults: [],
+
       limitations: [
         `Unsupported target format: ${rawTarget}`,
         "Currently supported target format is CVE-YYYY-NNNN.",
@@ -825,8 +874,8 @@ export async function investigateCve(
    */
 
   const [
-    nvdResult,
-    cisaResult,
+    nvdSettled,
+    cisaSettled,
   ] = await Promise.allSettled([
     fetchNvdCve(
       cveId,
@@ -844,6 +893,72 @@ export async function investigateCve(
     ),
   ]);
 
+  /*
+   * The current provider implementations already return ProviderResult
+   * objects and internally classify normal failures. Promise.allSettled is
+   * still kept as a defensive boundary so a future provider implementation
+   * that unexpectedly throws cannot bring down the complete investigation.
+   */
+
+  const providerResults: ProviderResult[] = [];
+
+  let nvdProviderResult: ProviderResult;
+
+  if (
+    nvdSettled.status ===
+    "fulfilled"
+  ) {
+    nvdProviderResult =
+      nvdSettled.value;
+  } else {
+    /*
+     * Defensive fallback.
+     *
+     * Normally fetchNvdCve should never reject because the provider itself
+     * maps failures into ProviderResult. If it does, preserve the failure
+     * explicitly instead of losing the information.
+     */
+    nvdProviderResult = {
+      provider: "NVD",
+      status: "error",
+      evidence: null,
+      error: errorMessage(
+        nvdSettled.reason,
+      ),
+      checkedAt:
+        new Date().toISOString(),
+    };
+  }
+
+  let cisaProviderResult: ProviderResult;
+
+  if (
+    cisaSettled.status ===
+    "fulfilled"
+  ) {
+    cisaProviderResult =
+      cisaSettled.value;
+  } else {
+    /*
+     * Defensive fallback for the CISA provider.
+     */
+    cisaProviderResult = {
+      provider: "CISA_KEV",
+      status: "error",
+      evidence: null,
+      error: errorMessage(
+        cisaSettled.reason,
+      ),
+      checkedAt:
+        new Date().toISOString(),
+    };
+  }
+
+  providerResults.push(
+    nvdProviderResult,
+    cisaProviderResult,
+  );
+
   /* ----------------------------------------------------------------------- */
   /* NVD                                                                      */
   /* ----------------------------------------------------------------------- */
@@ -852,25 +967,41 @@ export async function investigateCve(
     | Evidence
     | undefined;
 
+  /*
+   * Only actual evidence enters the evidence collection.
+   *
+   * ProviderResult itself is kept separately in providerResults.
+   */
   if (
-    nvdResult.status ===
-    "fulfilled"
+    nvdProviderResult.status ===
+    "success" &&
+    nvdProviderResult.evidence
   ) {
-    if (nvdResult.value) {
-      nvdEvidence =
-        nvdResult.value;
+    nvdEvidence =
+      nvdProviderResult.evidence;
 
-      evidence.push(
-        nvdEvidence,
-      );
-    } else {
-      limitations.push(
-        `NVD successfully responded but returned no matching record for ${cveId}.`,
-      );
-    }
-  } else {
+    evidence.push(
+      nvdEvidence,
+    );
+  }
+
+  if (
+    nvdProviderResult.status ===
+    "observed_absence"
+  ) {
     limitations.push(
-      `NVD lookup failed: ${errorMessage(nvdResult.reason)}`,
+      `NVD successfully responded but returned no matching record for ${cveId}.`,
+    );
+  }
+
+  const nvdFailure =
+    providerFailureLimitation(
+      nvdProviderResult,
+    );
+
+  if (nvdFailure) {
+    limitations.push(
+      nvdFailure,
     );
   }
 
@@ -885,44 +1016,58 @@ export async function investigateCve(
     | Evidence
     | undefined;
 
+  /*
+   * A successful CISA match means the CVE is listed.
+   */
   if (
-    cisaResult.status ===
-    "fulfilled"
+    cisaProviderResult.status ===
+    "success" &&
+    cisaProviderResult.evidence
   ) {
-    if (cisaResult.value) {
-      cisaEvidence =
-        cisaResult.value;
+    cisaEvidence =
+      cisaProviderResult.evidence;
 
-      evidence.push(
-        cisaEvidence,
-      );
+    evidence.push(
+      cisaEvidence,
+    );
 
-      kevStatus = "listed";
-    } else {
-      /*
-       * This is NOT an error.
-       *
-       * The catalog was successfully checked
-       * and the CVE was absent.
-       */
-      kevStatus =
-        "not-listed";
+    kevStatus =
+      "listed";
+  }
 
-      confirmedFacts.push(
-        `${cveId} was not found in the CISA Known Exploited Vulnerabilities catalog at retrieval time.`,
-      );
-    }
-  } else {
-    /*
-     * Request failure means UNKNOWN.
-     *
-     * Never convert a timeout/error into "not listed".
-     */
+  /*
+   * A successful CISA lookup with no match is an observed absence.
+   *
+   * This is a valid result, NOT an error.
+   */
+  if (
+    cisaProviderResult.status ===
+    "observed_absence"
+  ) {
+    kevStatus =
+      "not-listed";
+
+    confirmedFacts.push(
+      `${cveId} was not found in the CISA Known Exploited Vulnerabilities catalog at retrieval time.`,
+    );
+  }
+
+  /*
+   * Request failure means UNKNOWN.
+   *
+   * Never convert a timeout/error into "not listed".
+   */
+  const cisaFailure =
+    providerFailureLimitation(
+      cisaProviderResult,
+    );
+
+  if (cisaFailure) {
     kevStatus =
       "unknown";
 
     limitations.push(
-      `CISA KEV lookup failed: ${errorMessage(cisaResult.reason)}`,
+      cisaFailure,
     );
   }
 
@@ -990,7 +1135,8 @@ export async function investigateCve(
         : null
     );
 
-  const summary: InvestigationResult["summary"] =
+  const summary:
+    InvestigationResult["summary"] =
   {
     severity,
 
@@ -1020,6 +1166,16 @@ export async function investigateCve(
   /* Status                                                                   */
   /* ----------------------------------------------------------------------- */
 
+  const nvdCompleted =
+    providerCheckCompleted(
+      nvdProviderResult,
+    );
+
+  const cisaCompleted =
+    providerCheckCompleted(
+      cisaProviderResult,
+    );
+
   const hasNvdEvidence =
     Boolean(nvdEvidence);
 
@@ -1029,23 +1185,76 @@ export async function investigateCve(
   let status:
     InvestigationResult["status"];
 
+  /*
+   * CONFIRMED
+   *
+   * Both authoritative providers completed their checks successfully.
+   *
+   * CISA observed absence counts as a completed check. It should NOT force
+   * the whole investigation into "partial" merely because there is no KEV
+   * record.
+   *
+   * Example:
+   *
+   * NVD = success
+   * CISA = observed_absence
+   *
+   * => confirmed
+   */
   if (
-    hasNvdEvidence &&
-    hasCisaEvidence &&
+    nvdCompleted &&
+    cisaCompleted &&
     limitations.length === 0
   ) {
-    status = "confirmed";
-  } else if (
+    status =
+      "confirmed";
+  }
+
+  /*
+   * PARTIAL
+   *
+   * At least one provider returned usable evidence, but the complete
+   * investigation could not be fully established.
+   *
+   * Examples:
+   *
+   * NVD success + CISA timeout
+   * NVD success + CISA error
+   * NVD observed absence + CISA listed
+   */
+  else if (
     hasNvdEvidence ||
     hasCisaEvidence
   ) {
-    status = "partial";
-  } else if (
+    status =
+      "partial";
+  }
+
+  /*
+   * FAILED
+   *
+   * No usable evidence was returned and one or more provider failures
+   * occurred.
+   */
+  else if (
     limitations.length > 0
   ) {
-    status = "failed";
-  } else {
-    status = "not-found";
+    status =
+      "failed";
+  }
+
+  /*
+   * NOT FOUND
+   *
+   * Both authoritative providers completed successfully but neither
+   * produced evidence.
+   *
+   * In practice this generally means NVD observed absence and CISA
+   * observed absence.
+   */
+  else {
+    status =
+      "not-found";
   }
 
   /* ----------------------------------------------------------------------- */
@@ -1079,6 +1288,8 @@ export async function investigateCve(
     inferences,
 
     evidence,
+
+    providerResults,
 
     limitations,
 
