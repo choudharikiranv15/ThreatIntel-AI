@@ -1,7 +1,7 @@
 {
   "id": "threatintel-ai-engine",
   "name": "ThreatIntel AI Engine",
-  "description": "Evidence-first threat intelligence investigation tools. Currently supports CVE investigations using NVD and CISA KEV.",
+  "description": "Evidence-first threat intelligence investigation engine. Currently supports CVE investigations using NVD and CISA KEV. The tool is the authoritative evidence-gathering layer. The model must not invent, infer, or replace source-backed facts with generic web knowledge.",
   "version": "0.2.0",
   "configSchema": {
     "type": "object",
@@ -13,7 +13,9 @@
       "requestTimeoutMs": {
         "type": "number",
         "description": "HTTP request timeout in milliseconds.",
-        "default": 15000
+        "default": 15000,
+        "minimum": 1000,
+        "maximum": 60000
       }
     }
   },

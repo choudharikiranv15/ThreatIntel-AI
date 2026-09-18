@@ -12,6 +12,8 @@ import {
 
 import type {
   Evidence,
+  EvidenceFactRecord,
+  InferenceRecord,
   InvestigationResult,
   KevStatus,
   CvssDetails,
@@ -97,6 +99,16 @@ function errorMessage(
   return error instanceof Error
     ? error.message
     : String(error);
+}
+
+function assignEvidenceId(
+  cveId: string,
+  evidence: Evidence,
+): Evidence {
+  return {
+    ...evidence,
+    id: `${evidence.source}:${cveId}`,
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -664,11 +676,34 @@ function extractCisaFacts(
 /* Inferences                                                                 */
 /* -------------------------------------------------------------------------- */
 
+function addInference(
+  inferences: string[],
+  inferenceProvenance: InferenceRecord[],
+  claim: string,
+  supportingFactIds: string[],
+): void {
+  const id =
+    `inference-${inferenceProvenance.length + 1}`;
+
+  inferences.push(claim);
+
+  inferenceProvenance.push({
+    id,
+    claim,
+    supportingFactIds,
+  });
+}
+
 function buildInferences(
   cveId: string,
   summary: InvestigationResult["summary"],
-): string[] {
+  factProvenance: EvidenceFactRecord[],
+): {
+  inferences: string[];
+  provenance: InferenceRecord[];
+} {
   const inferences: string[] = [];
+  const provenance: InferenceRecord[] = [];
 
   /*
    * These are deliberately conservative.
@@ -681,8 +716,21 @@ function buildInferences(
       "AV:N",
     )
   ) {
-    inferences.push(
-      `${cveId} has a network attack vector according to the retrieved CVSS vector; internet-facing or remotely reachable assets should therefore receive elevated review priority.`,
+    const supportingFactIds =
+      factProvenance
+        .filter((fact) =>
+          fact.claim.includes("NVD CVSS")
+        )
+        .map((fact) => fact.id);
+
+    const claim =
+      `${cveId} has a network attack vector according to the retrieved CVSS vector; internet-facing or remotely reachable assets should therefore receive elevated review priority.`;
+
+    addInference(
+      inferences,
+      provenance,
+      claim,
+      supportingFactIds,
     );
   }
 
@@ -690,8 +738,23 @@ function buildInferences(
     summary.kevStatus ===
     "listed"
   ) {
-    inferences.push(
-      `${cveId} has confirmed CISA KEV inclusion, which supports prioritizing remediation and threat hunting.`,
+    const supportingFactIds =
+      factProvenance
+        .filter((fact) =>
+          fact.claim.includes(
+            "listed in the CISA Known Exploited Vulnerabilities",
+          )
+        )
+        .map((fact) => fact.id);
+
+    const claim =
+      `${cveId} has confirmed CISA KEV inclusion, which supports prioritizing remediation and threat hunting.`;
+
+    addInference(
+      inferences,
+      provenance,
+      claim,
+      supportingFactIds,
     );
   }
 
@@ -699,12 +762,21 @@ function buildInferences(
     summary.kevStatus ===
     "not-listed"
   ) {
-    inferences.push(
-      `CISA KEV did not contain ${cveId} at retrieval time; this does not establish that exploitation has not occurred.`,
+    const claim =
+      `CISA KEV did not contain ${cveId} at retrieval time; this does not establish that exploitation has not occurred.`;
+
+    addInference(
+      inferences,
+      provenance,
+      claim,
+      [],
     );
   }
 
-  return inferences;
+  return {
+    inferences,
+    provenance,
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -802,6 +874,25 @@ function providerCheckCompleted(
   );
 }
 
+function addConfirmedFact(
+  confirmedFacts: string[],
+  factProvenance: EvidenceFactRecord[],
+  claim: string,
+  evidenceId: string,
+  field?: string,
+): void {
+  const id = `fact-${factProvenance.length + 1}`;
+
+  confirmedFacts.push(claim);
+
+  factProvenance.push({
+    id,
+    claim,
+    evidenceId,
+    ...(field ? { field } : {}),
+  });
+}
+
 /* -------------------------------------------------------------------------- */
 /* Investigation                                                              */
 /* -------------------------------------------------------------------------- */
@@ -851,7 +942,11 @@ export async function investigateCve(
 
       confirmedFacts: [],
 
+      factProvenance: [],
+
       inferences: [],
+
+      inferenceProvenance: [],
 
       evidence: [],
 
@@ -871,6 +966,7 @@ export async function investigateCve(
   const limitations: string[] = [];
 
   const confirmedFacts: string[] = [];
+  const factProvenance: EvidenceFactRecord[] = [];
 
   /*
    * ------------------------------------------------------------------------
@@ -999,12 +1095,12 @@ export async function investigateCve(
     "success" &&
     nvdProviderResult.evidence
   ) {
-    nvdEvidence =
-      nvdProviderResult.evidence;
-
-    evidence.push(
-      nvdEvidence,
+    nvdEvidence = assignEvidenceId(
+      cveId,
+      nvdProviderResult.evidence,
     );
+
+    evidence.push(nvdEvidence);
   }
 
   if (
@@ -1046,12 +1142,12 @@ export async function investigateCve(
     "success" &&
     cisaProviderResult.evidence
   ) {
-    cisaEvidence =
-      cisaProviderResult.evidence;
-
-    evidence.push(
-      cisaEvidence,
+    cisaEvidence = assignEvidenceId(
+      cveId,
+      cisaProviderResult.evidence,
     );
+
+    evidence.push(cisaEvidence);
 
     kevStatus =
       "listed";
@@ -1068,10 +1164,6 @@ export async function investigateCve(
   ) {
     kevStatus =
       "not-listed";
-
-    confirmedFacts.push(
-      `${cveId} was not found in the CISA Known Exploited Vulnerabilities catalog at retrieval time.`,
-    );
   }
 
   /*
@@ -1116,9 +1208,14 @@ export async function investigateCve(
         nvdEvidence,
       );
 
-    confirmedFacts.push(
-      ...extracted.facts,
-    );
+    for (const fact of extracted.facts) {
+      addConfirmedFact(
+        confirmedFacts,
+        factProvenance,
+        fact,
+        nvdEvidence.id,
+      );
+    }
 
     cvss =
       extracted.cvss;
@@ -1135,12 +1232,17 @@ export async function investigateCve(
   /* ----------------------------------------------------------------------- */
 
   if (cisaEvidence) {
-    confirmedFacts.push(
-      ...extractCisaFacts(
-        cveId,
-        cisaEvidence,
-      ),
-    );
+    for (const fact of extractCisaFacts(
+      cveId,
+      cisaEvidence,
+    )) {
+      addConfirmedFact(
+        confirmedFacts,
+        factProvenance,
+        fact,
+        cisaEvidence.id,
+      );
+    }
   }
 
   /* ----------------------------------------------------------------------- */
@@ -1178,11 +1280,18 @@ export async function investigateCve(
   /* Inferences                                                               */
   /* ----------------------------------------------------------------------- */
 
-  const inferences =
+  const inferenceResult =
     buildInferences(
       cveId,
       summary,
+      factProvenance,
     );
+
+  const inferences =
+    inferenceResult.inferences;
+
+  const inferenceProvenance =
+    inferenceResult.provenance;
 
   /* ----------------------------------------------------------------------- */
   /* Status                                                                   */
@@ -1307,7 +1416,11 @@ export async function investigateCve(
 
     confirmedFacts,
 
+    factProvenance,
+
     inferences,
+
+    inferenceProvenance,
 
     evidence,
 

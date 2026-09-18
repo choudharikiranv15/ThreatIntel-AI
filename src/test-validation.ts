@@ -23,6 +23,7 @@ function makeEvidence(
     source: "NVD" | "CISA_KEV",
 ): Evidence {
     return {
+        id: `${source}:test`,
         source,
         sourceType: "primary",
         retrievedAt:

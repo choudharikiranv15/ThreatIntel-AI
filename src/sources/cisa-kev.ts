@@ -122,6 +122,8 @@ export async function fetchCisaKev(
     }
 
     const evidence: Evidence = {
+      id: `CISA_KEV:${normalized}`,
+
       source: "CISA_KEV",
 
       sourceType: "primary",

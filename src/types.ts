@@ -41,6 +41,19 @@ export type EvidenceFact = {
   field?: string;
 };
 
+export type EvidenceFactRecord = {
+  id: string;
+  claim: string;
+  evidenceId: string;
+  field?: string;
+};
+
+export type InferenceRecord = {
+  id: string;
+  claim: string;
+  supportingFactIds: string[];
+};
+
 export type EvidenceReference = {
   title: string;
   url: string;
@@ -48,6 +61,8 @@ export type EvidenceReference = {
 };
 
 export type Evidence = {
+  id: string;
+
   source: SourceId;
 
   sourceType: SourceType;
@@ -132,12 +147,16 @@ export type InvestigationResult = {
    */
   confirmedFacts: string[];
 
+  factProvenance: EvidenceFactRecord[];
+
   /**
    * Conservative analytical conclusions derived from confirmed facts.
    *
    * These are not source facts.
    */
   inferences: string[];
+
+  inferenceProvenance: InferenceRecord[];
 
   /**
    * Directly retrieved evidence.

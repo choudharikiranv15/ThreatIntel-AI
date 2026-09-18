@@ -38,6 +38,7 @@ function successEvidence(
         checkedAt:
             "2026-01-01T00:00:00.000Z",
         evidence: {
+            id: `${source}:${CVE}`,
             source,
             sourceType: "primary",
             retrievedAt:

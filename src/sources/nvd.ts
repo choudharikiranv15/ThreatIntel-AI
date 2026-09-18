@@ -168,6 +168,8 @@ export async function fetchNvdCve(
     }
 
     const evidence: Evidence = {
+      id: `NVD:${normalized}`,
+
       source: "NVD",
 
       sourceType: "primary",
