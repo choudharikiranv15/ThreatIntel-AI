@@ -3,6 +3,10 @@ import {
 } from "./sources/nvd.js";
 
 import {
+  normalizeInvalidProviderResult,
+} from "./validation.js";
+
+import {
   fetchCisaKev,
 } from "./sources/cisa-kev.js";
 
@@ -930,20 +934,21 @@ export async function investigateCve(
 
   let nvdProviderResult: ProviderResult;
 
-  if (
-    nvdSettled.status ===
-    "fulfilled"
-  ) {
+  if (nvdSettled.status === "fulfilled") {
     nvdProviderResult =
-      nvdSettled.value;
+      normalizeInvalidProviderResult(
+        nvdSettled.value,
+        "NVD",
+      );
   } else {
     nvdProviderResult = {
       provider: "NVD",
       status: "error",
       evidence: null,
-      error: errorMessage(
-        nvdSettled.reason,
-      ),
+      error:
+        nvdSettled.reason instanceof Error
+          ? nvdSettled.reason.message
+          : String(nvdSettled.reason),
       checkedAt:
         new Date().toISOString(),
     };
@@ -951,20 +956,21 @@ export async function investigateCve(
 
   let cisaProviderResult: ProviderResult;
 
-  if (
-    cisaSettled.status ===
-    "fulfilled"
-  ) {
+  if (cisaSettled.status === "fulfilled") {
     cisaProviderResult =
-      cisaSettled.value;
+      normalizeInvalidProviderResult(
+        cisaSettled.value,
+        "CISA_KEV",
+      );
   } else {
     cisaProviderResult = {
       provider: "CISA_KEV",
       status: "error",
       evidence: null,
-      error: errorMessage(
-        cisaSettled.reason,
-      ),
+      error:
+        cisaSettled.reason instanceof Error
+          ? cisaSettled.reason.message
+          : String(cisaSettled.reason),
       checkedAt:
         new Date().toISOString(),
     };
