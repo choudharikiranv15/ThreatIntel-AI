@@ -1,48 +1,52 @@
-# ThreatIntel AI Engine v0.1
+# ThreatIntel AI Engine v0.2
 
-The first engine module for ThreatIntel AI.
+A CVE investigation engine for ThreatIntel AI. Retrieves authoritative evidence from external intelligence sources and structures it for LLM-assisted SOC analysis.
 
-## Goal
+## What it does
 
-Turn ThreatIntel AI from:
+Given a CVE identifier, the engine:
 
-Discord -> LLM -> answer
+- Retrieves the NVD CVE record (CVSS, CWE, affected configurations, references)
+- Checks CISA Known Exploited Vulnerabilities (KEV) catalog status
+- Validates every provider response against a strict contract before accepting it
+- Generates human-readable confirmed facts backed by traceable evidence
+- Produces conservative analytical inferences with explicit supporting fact references
+- Returns explicit limitations when a source is unavailable or returns no data
 
-into:
-
-Discord -> OpenClaw -> investigation tool -> authoritative evidence -> LLM reasoning -> SOC report
-
-## v0.1 scope
-
-The first tool is:
-
-`threatintel_investigate`
-
-It currently supports CVE investigations and retrieves:
-
-- NVD CVE record
-- CISA Known Exploited Vulnerabilities (KEV) status
-- CVSS information when present
-- CWE/weakness information when present
-- affected-configuration presence
-- authoritative/reference URLs
-- explicit limitations
-
-It deliberately does **not** invent MITRE ATT&CK mappings or detection claims.
+It deliberately does **not** invent MITRE ATT&CK mappings, detection claims, or facts not present in retrieved evidence.
 
 ## Build
-
-PowerShell:
 
 ```powershell
 npm install
 npm run build
-openclaw plugins validate --entry .\dist\index.js
 ```
 
-## Local install into OpenClaw
+## Validate
 
-From this directory:
+```powershell
+npm run validate
+```
+
+## Tests
+
+```powershell
+# Integration test against live NVD and CISA APIs
+npm run test:cve
+
+# Fault-injection tests (provider timeouts, errors, absences)
+npm run test:faults
+
+# Provider contract validation tests
+npm run test:validation
+
+# Provenance graph integrity tests
+npm run test:provenance
+```
+
+The primary regression case is `CVE-2024-3094`. Expected outcome: `confirmed` status, CVSS 10 CRITICAL, KEV `not-listed`.
+
+## Install into OpenClaw
 
 ```powershell
 openclaw plugins install --link . --force
@@ -56,30 +60,10 @@ Then verify:
 openclaw plugins inspect threatintel-ai-engine --runtime --json
 ```
 
-You should see the `threatintel_investigate` tool registered.
+## Design rules
 
-## Golden test
-
-```powershell
-npm run test:cve
-```
-
-Use `CVE-2024-3094` as the first regression case.
-
-The expected behavior is evidence-first: the model should use the tool output rather than relying on memory for affected versions, CVSS, KEV status, or the technical description.
-
-## Next engine modules
-
-1. Vendor advisory collector
-2. MITRE ATT&CK lookup
-3. IOC classifier + normalizer
-4. VirusTotal / AbuseIPDB / OTX enrichment
-5. Evidence correlation
-6. confidence scoring
-7. investigation planner
-8. internal SOC RAG
-9. golden-case regression suite
-
-## Design rule
-
-The LLM is the reasoning layer, not the source of truth.
+- The LLM is the **reasoning layer**, not the source of truth.
+- Every confirmed fact must trace back to a retrieved evidence document.
+- Every inference must reference the facts that support it.
+- Provider failures are surfaced as explicit limitations, never silently dropped.
+- `observed_absence` (source checked, CVE not found) is never conflated with an error or a positive result.
