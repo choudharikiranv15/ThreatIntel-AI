@@ -14,9 +14,14 @@ import type {
   ProviderResult,
 } from "./types.js";
 
+import type {
+  InvestigationProviders,
+} from "./providers.js";
+
 export interface InvestigationConfig {
   nvdApiKey?: string;
   requestTimeoutMs: number;
+  providers?: Partial<InvestigationProviders>;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -865,40 +870,61 @@ export async function investigateCve(
 
   /*
    * ------------------------------------------------------------------------
-   * IMPORTANT PERFORMANCE FIX
+   * PROVIDER DEPENDENCY INJECTION
    *
-   * NVD and CISA are independent.
+   * Production uses the real NVD and CISA adapters.
    *
-   * They must NOT run sequentially.
+   * Tests can replace either provider with a deterministic fake provider.
+   *
+   * This keeps investigation orchestration independent from the concrete
+   * implementation of external intelligence sources.
    * ------------------------------------------------------------------------
+   */
+
+  const providers: InvestigationProviders = {
+    nvd: (
+      cveId,
+    ) =>
+      fetchNvdCve(
+        cveId,
+        {
+          apiKey:
+            config.nvdApiKey,
+          timeoutMs:
+            config.requestTimeoutMs,
+        },
+      ),
+
+    cisaKev: (
+      cveId,
+    ) =>
+      fetchCisaKev(
+        cveId,
+        config.requestTimeoutMs,
+      ),
+
+    ...config.providers,
+  };
+
+  /*
+   * NVD and CISA are independent sources.
+   *
+   * Run them concurrently so a slow source does not unnecessarily block
+   * another independent source.
+   *
+   * Promise.allSettled provides a second defensive boundary: even if a
+   * provider implementation unexpectedly throws, the investigation can
+   * preserve the failure as ProviderResult instead of collapsing entirely.
    */
 
   const [
     nvdSettled,
     cisaSettled,
-  ] = await Promise.allSettled([
-    fetchNvdCve(
-      cveId,
-      {
-        apiKey:
-          config.nvdApiKey,
-        timeoutMs:
-          config.requestTimeoutMs,
-      },
-    ),
-
-    fetchCisaKev(
-      cveId,
-      config.requestTimeoutMs,
-    ),
-  ]);
-
-  /*
-   * The current provider implementations already return ProviderResult
-   * objects and internally classify normal failures. Promise.allSettled is
-   * still kept as a defensive boundary so a future provider implementation
-   * that unexpectedly throws cannot bring down the complete investigation.
-   */
+  ] =
+    await Promise.allSettled([
+      providers.nvd(cveId),
+      providers.cisaKev(cveId),
+    ]);
 
   const providerResults: ProviderResult[] = [];
 
@@ -911,13 +937,6 @@ export async function investigateCve(
     nvdProviderResult =
       nvdSettled.value;
   } else {
-    /*
-     * Defensive fallback.
-     *
-     * Normally fetchNvdCve should never reject because the provider itself
-     * maps failures into ProviderResult. If it does, preserve the failure
-     * explicitly instead of losing the information.
-     */
     nvdProviderResult = {
       provider: "NVD",
       status: "error",
@@ -939,9 +958,6 @@ export async function investigateCve(
     cisaProviderResult =
       cisaSettled.value;
   } else {
-    /*
-     * Defensive fallback for the CISA provider.
-     */
     cisaProviderResult = {
       provider: "CISA_KEV",
       status: "error",

@@ -23,22 +23,12 @@ console.log(
 
 const failures: string[] = [];
 
-/* -------------------------------------------------------------------------- */
-/* Helpers                                                                    */
-/* -------------------------------------------------------------------------- */
-
-function fail(
-  message: string,
-): void {
-  failures.push(message);
-}
-
 function assert(
   condition: boolean,
   message: string,
 ): void {
   if (!condition) {
-    fail(message);
+    failures.push(message);
   }
 }
 
@@ -96,7 +86,8 @@ const nvdProvider =
 const cisaProvider =
   result.providerResults.find(
     (provider) =>
-      provider.provider === "CISA_KEV",
+      provider.provider ===
+      "CISA_KEV",
   );
 
 assert(
@@ -109,13 +100,6 @@ assert(
   "CISA KEV provider result was not returned.",
 );
 
-/*
- * Every investigation currently depends on
- * exactly these two providers.
- *
- * This protects the orchestration contract from
- * silently dropping a provider.
- */
 assert(
   result.providerResults.length === 2,
   `Expected 2 provider results, got ${result.providerResults.length}`,
@@ -150,10 +134,6 @@ for (
     `${provider.provider} is missing checkedAt.`,
   );
 
-  /*
-   * Provider failures must not contain
-   * fabricated evidence.
-   */
   if (
     provider.status === "error" ||
     provider.status === "timeout"
@@ -164,10 +144,6 @@ for (
     );
   }
 
-  /*
-   * Successful provider retrieval must contain
-   * evidence.
-   */
   if (
     provider.status === "success"
   ) {
@@ -237,7 +213,7 @@ if (nvdEvidence) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* NVD provider ↔ evidence consistency                                       */
+/* NVD provider/evidence consistency                                          */
 /* -------------------------------------------------------------------------- */
 
 if (nvdProvider) {
@@ -329,18 +305,6 @@ assert(
   )}`,
 );
 
-/*
- * Important semantic rule:
- *
- * observed_absence means:
- *
- * "The source was successfully checked and
- * the requested CVE was not present."
- *
- * It does NOT mean:
- *
- * "The vulnerability is not exploited."
- */
 if (cisaProvider) {
   if (
     cisaProvider.status ===
@@ -451,17 +415,14 @@ assert(
   "No explicit inference section was produced.",
 );
 
-/* -------------------------------------------------------------------------- */
-/* Evidence boundary                                                          */
-/* -------------------------------------------------------------------------- */
-
-/*
- * The investigation engine must clearly distinguish
- * retrieved evidence from analyst inference.
- *
- * We don't want an inference to be accidentally
- * presented as a confirmed fact.
- */
+for (
+  const fact of result.confirmedFacts
+) {
+  assert(
+    fact.trim().length > 0,
+    "Empty confirmed fact was produced.",
+  );
+}
 
 for (
   const inference of result.inferences
@@ -469,15 +430,6 @@ for (
   assert(
     inference.trim().length > 0,
     "Empty inference was produced.",
-  );
-}
-
-for (
-  const fact of result.confirmedFacts
-) {
-  assert(
-    fact.trim().length > 0,
-    "Empty confirmed fact was produced.",
   );
 }
 
@@ -494,9 +446,6 @@ const combinedText =
     .join("\n")
     .toLowerCase();
 
-/*
- * Vulnerable software ≠ confirmed compromise.
- */
 assert(
   !combinedText.includes(
     "presence of a vulnerable version confirms compromise",
@@ -504,9 +453,6 @@ assert(
   "Engine incorrectly treats vulnerable-version presence as proof of compromise.",
 );
 
-/*
- * KEV absence ≠ proof of no exploitation.
- */
 assert(
   !combinedText.includes(
     "not listed in kev means the vulnerability is not exploited",
@@ -522,12 +468,9 @@ assert(
 );
 
 /* -------------------------------------------------------------------------- */
-/* Limitation consistency                                                      */
+/* Limitation consistency                                                     */
 /* -------------------------------------------------------------------------- */
 
-/*
- * A provider failure must produce a limitation.
- */
 for (
   const provider of result.providerResults
 ) {
@@ -558,9 +501,6 @@ for (
   }
 }
 
-/*
- * CISA failure must NEVER become not-listed.
- */
 if (
   cisaProvider &&
   (
