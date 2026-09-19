@@ -117,15 +117,16 @@ export async function persistInvestigation(
         // ---------------------------------------------------------
 
         const factQuery = `
-      INSERT INTO facts (
-        id,
-        investigation_id,
-        evidence_id,
-        claim,
-        field
-      )
-      VALUES ($1, $2, $3, $4, $5)
-    `;
+  INSERT INTO facts (
+    investigation_id,
+    evidence_id,
+    claim,
+    field,
+    source_fact_id
+  )
+  VALUES ($1, $2, $3, $4, $5)
+  RETURNING id
+`;
 
         for (const fact of result.factProvenance) {
             const databaseEvidenceId = evidenceIdMap.get(
@@ -138,13 +139,16 @@ export async function persistInvestigation(
                 );
             }
 
-            await client.query(factQuery, [
-                fact.id,
-                investigationId,
-                databaseEvidenceId,
-                fact.claim,
-                fact.field ?? null,
-            ]);
+            const factResult = await client.query<{ id: string }>(
+                factQuery,
+                [
+                    investigationId,
+                    databaseEvidenceId,
+                    fact.claim,
+                    fact.field ?? null,
+                    fact.id,
+                ],
+            );
         }
 
         // ---------------------------------------------------------
@@ -152,22 +156,26 @@ export async function persistInvestigation(
         // ---------------------------------------------------------
 
         const inferenceQuery = `
-      INSERT INTO inferences (
-        id,
-        investigation_id,
-        claim,
-        supporting_fact_ids
-      )
-      VALUES ($1, $2, $3, $4)
-    `;
+  INSERT INTO inferences (
+    investigation_id,
+    claim,
+    supporting_fact_ids,
+    source_inference_id
+  )
+  VALUES ($1, $2, $3, $4)
+  RETURNING id
+`;
 
         for (const inference of result.inferenceProvenance) {
-            await client.query(inferenceQuery, [
-                inference.id,
-                investigationId,
-                inference.claim,
-                JSON.stringify(inference.supportingFactIds),
-            ]);
+            const inferenceResult = await client.query<{ id: string }>(
+                inferenceQuery,
+                [
+                    investigationId,
+                    inference.claim,
+                    JSON.stringify(inference.supportingFactIds),
+                    inference.id,
+                ],
+            );
         }
 
         // ---------------------------------------------------------
