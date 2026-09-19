@@ -7,6 +7,10 @@ import {
   investigateCve,
 } from "./engine.js";
 
+import {
+  persistInvestigationResult,
+} from "./persistence/index.js";
+
 export default defineToolPlugin({
   id: "threatintel-ai-engine",
 
@@ -110,8 +114,26 @@ export default defineToolPlugin({
             },
           );
 
-        return result;
-      },
+        const persistence =
+          await persistInvestigationResult(
+            result,
+          );
+
+        return {
+          ...result,
+
+          persistence: {
+            persisted:
+              persistence.persisted,
+
+            investigationId:
+              persistence.investigationId,
+
+            error:
+              persistence.error,
+          },
+        };
+      }
     }),
   ],
-});
+});   
