@@ -3,17 +3,15 @@ import {
   defineToolPlugin,
 } from "openclaw/plugin-sdk/tool-plugin";
 
-import {
-  investigateCve,
-} from "./engine.js";
 
-import {
-  persistInvestigationResult,
-} from "./persistence/index.js";
 
 import {
   getPriorInvestigation,
 } from "./persistence/investigation-prior.js";
+
+import {
+  investigateWithPriorPolicy,
+} from "./persistence/investigation-service.js";
 
 export default defineToolPlugin({
   id: "threatintel-ai-engine",
@@ -59,19 +57,16 @@ export default defineToolPlugin({
       description:
         [
           "Investigate a cybersecurity target using authoritative threat intelligence sources.",
-
           "Currently supports CVE identifiers.",
-
+          "Before performing a fresh investigation, check persisted investigation context.",
+          "Reuse a prior investigation only when the deterministic freshness and completeness policy allows reuse.",
+          "Otherwise perform a fresh investigation using NVD and CISA KEV.",
+          "Fresh investigations are persisted automatically.",
           "For CVEs, retrieve evidence from NVD and CISA KEV.",
-
           "Return structured evidence including severity, CVSS, affected versions when explicitly available, CISA KEV status, evidence sources, confirmed facts, inferences, limitations, and SOC analyst guidance.",
-
           "Never invent facts.",
-
           "Never convert an unavailable source into a negative finding.",
-
           "CISA KEV states must distinguish listed, not-listed, and unknown.",
-
           "Use the returned structured fields as the source of truth.",
         ].join(" "),
 
@@ -110,8 +105,8 @@ export default defineToolPlugin({
       ) {
         context.signal?.throwIfAborted();
 
-        const result =
-          await investigateCve(
+        const execution =
+          await investigateWithPriorPolicy(
             String(target),
             {
               nvdApiKey:
@@ -123,24 +118,44 @@ export default defineToolPlugin({
             },
           );
 
-        const persistence =
-          await persistInvestigationResult(
-            result,
-          );
+        if (
+          execution.mode === "reused" &&
+          execution.prior.context
+        ) {
+          return {
+            mode: "reused",
+
+            target:
+              execution.prior.target,
+
+            investigation:
+              execution.prior.context.investigation,
+
+            evidence:
+              execution.prior.context.evidence,
+
+            facts:
+              execution.prior.context.facts,
+
+            inferences:
+              execution.prior.context.inferences,
+
+            priorDecision:
+              execution.prior.decision,
+          };
+        }
 
         return {
-          ...result,
+          mode: "refreshed",
 
-          persistence: {
-            persisted:
-              persistence.persisted,
+          investigation:
+            execution.freshResult,
 
-            investigationId:
-              persistence.investigationId,
+          persistence:
+            execution.persistence,
 
-            error:
-              persistence.error,
-          },
+          priorDecision:
+            execution.prior.decision,
         };
       },
     }),
