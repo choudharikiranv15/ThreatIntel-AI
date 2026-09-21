@@ -15,7 +15,8 @@
     "test:persistence": "node ./dist/persistence/test-persistence.js",
     "test:history": "node ./dist/persistence/test-investigation-history.js",
     "test:context": "node ./dist/persistence/test-investigation-context.js",
-    "test:prior": "node ./dist/persistence/test-investigation-prior.js"
+    "test:prior": "node ./dist/persistence/test-investigation-prior.js",
+    "test:policy": "node ./dist/persistence/test-investigation-policy.js"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52",

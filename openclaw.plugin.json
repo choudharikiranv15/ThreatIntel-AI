@@ -1,7 +1,7 @@
 {
   "id": "threatintel-ai-engine",
   "name": "ThreatIntel AI Engine",
-  "description": "Evidence-first threat intelligence investigation engine. Currently supports CVE investigations using NVD and CISA KEV. The tool is the authoritative evidence-gathering layer. The model must not invent, infer, or replace source-backed facts with generic web knowledge.",
+  "description": "Evidence-first threat intelligence investigation engine. Currently supports CVE investigations using NVD and CISA KEV, plus retrieval of previously persisted investigation context.",
   "version": "0.2.0",
   "configSchema": {
     "type": "object",
@@ -24,7 +24,8 @@
   },
   "contracts": {
     "tools": [
-      "threatintel_investigate"
+      "threatintel_investigate",
+      "threatintel_prior_investigation"
     ]
   },
   "toolMetadata": {
