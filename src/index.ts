@@ -11,13 +11,17 @@ import {
   persistInvestigationResult,
 } from "./persistence/index.js";
 
+import {
+  getPriorInvestigation,
+} from "./persistence/investigation-prior.js";
+
 export default defineToolPlugin({
   id: "threatintel-ai-engine",
 
   name: "ThreatIntel AI Engine",
 
   description:
-    "Evidence-first threat intelligence investigation engine. Currently supports CVE investigations using NVD and CISA KEV. The tool is the authoritative evidence-gathering layer. The model must not invent, infer, or replace source-backed facts with generic web knowledge.",
+    "Evidence-first threat intelligence investigation engine. Currently supports CVE investigations using NVD and CISA KEV, plus retrieval of previously persisted investigation context.",
 
   configSchema: Type.Object({
     nvdApiKey: Type.Optional(
@@ -40,6 +44,11 @@ export default defineToolPlugin({
   }),
 
   tools: (tool) => [
+    /*
+     * ------------------------------------------------------------
+     * Fresh evidence-first investigation
+     * ------------------------------------------------------------
+     */
     tool({
       name:
         "threatintel_investigate",
@@ -133,7 +142,56 @@ export default defineToolPlugin({
               persistence.error,
           },
         };
-      }
+      },
+    }),
+
+    /*
+     * ------------------------------------------------------------
+     * Prior investigation retrieval
+     * ------------------------------------------------------------
+     */
+    tool({
+      name:
+        "threatintel_prior_investigation",
+
+      label:
+        "ThreatIntel Prior Investigation",
+
+      description:
+        [
+          "Retrieve the latest persisted investigation for a cybersecurity target.",
+
+          "Use this before performing a fresh investigation when prior intelligence may already exist.",
+
+          "Returns the latest investigation metadata together with its persisted evidence, facts, and inferences.",
+
+          "Use the returned context as prior evidence, not as a replacement for current authoritative source retrieval when freshness matters.",
+
+          "If no prior investigation exists, the tool returns found=false.",
+
+          "Never interpret the absence of a prior investigation as evidence that the target is safe or harmless.",
+        ].join(" "),
+
+      parameters:
+        Type.Object({
+          target:
+            Type.String({
+              description:
+                "Cybersecurity target to search for in persisted investigation history, for example CVE-2024-3094.",
+            }),
+        }),
+
+      async execute(
+        { target },
+        _config,
+        context,
+      ) {
+        context.signal?.throwIfAborted();
+
+        return await getPriorInvestigation(
+          String(target),
+        );
+      },
     }),
   ],
-});   
+});
