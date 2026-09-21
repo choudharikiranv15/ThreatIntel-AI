@@ -12,7 +12,9 @@
     "test:validation": "node ./dist/test-validation.js",
     "test:provenance": "node ./dist/test-provenance.js",
     "test:db": "node ./dist/persistence/test-db.js",
-    "test:persistence": "node ./dist/persistence/test-persistence.js"
+    "test:persistence": "node ./dist/persistence/test-persistence.js",
+    "test:history": "node ./dist/persistence/test-investigation-history.js",
+    "test:context": "node ./dist/persistence/test-investigation-context.js"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52",
