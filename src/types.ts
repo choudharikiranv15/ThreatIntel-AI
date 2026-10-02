@@ -29,6 +29,21 @@ export type InvestigationStatus =
   | "not-found"
   | "failed";
 
+export type KnowledgeState =
+  | "confirmed"
+  | "contradicted"
+  | "unsupported"
+  | "unknown";
+
+export type ClaimVerification = {
+  id: string;
+  claim: string;
+  state: KnowledgeState;
+
+  supportingFactIds: string[];
+  contradictingFactIds: string[];
+};
+
 export type CvssDetails = {
   version: string | null;
   baseScore: number | null;
@@ -128,6 +143,7 @@ export type InvestigationSummary = {
 
   affectedVersions: string[];
 };
+
 
 export type InvestigationResult = {
   target: string;
