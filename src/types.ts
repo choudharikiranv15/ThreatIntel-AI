@@ -39,7 +39,6 @@ export type ClaimVerification = {
   id: string;
   claim: string;
   state: KnowledgeState;
-
   supportingFactIds: string[];
   contradictingFactIds: string[];
 };
@@ -144,7 +143,6 @@ export type InvestigationSummary = {
   affectedVersions: string[];
 };
 
-
 export type InvestigationResult = {
   target: string;
 
@@ -196,4 +194,12 @@ export type InvestigationResult = {
    * Conservative SOC recommendations.
    */
   analystGuidance: string[];
+
+  /**
+   * Deterministic claim verification results.
+   *
+   * These are authoritative verification metadata.
+   * The LLM must not create or override verification states.
+   */
+  verifications: ClaimVerification[];
 };

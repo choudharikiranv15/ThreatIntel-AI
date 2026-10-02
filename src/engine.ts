@@ -10,7 +10,14 @@ import {
   fetchCisaKev,
 } from "./sources/cisa-kev.js";
 
+import {
+  verifyCvssClaim,
+  verifyKevClaim,
+  type CvssClaim,
+} from "./verification/index.js";
+
 import type {
+  ClaimVerification,
   Evidence,
   EvidenceFactRecord,
   InferenceRecord,
@@ -28,6 +35,17 @@ export interface InvestigationConfig {
   nvdApiKey?: string;
   requestTimeoutMs: number;
   providers?: Partial<InvestigationProviders>;
+}
+
+export function verifyInvestigationCvssClaim(
+  result: InvestigationResult,
+  claim: CvssClaim,
+): ClaimVerification {
+  return verifyCvssClaim({
+    claim,
+    observed: result.summary.cvss,
+    factProvenance: result.factProvenance,
+  });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -914,6 +932,7 @@ export async function investigateCve(
    */
   if (!isCve(cveId)) {
     return {
+      verifications: [],
       target: rawTarget,
 
       targetType: "cve",
@@ -1214,6 +1233,9 @@ export async function investigateCve(
         factProvenance,
         fact,
         nvdEvidence.id,
+        fact.includes(" NVD CVSS:")
+          ? "cvss"
+          : undefined,
       );
     }
 
@@ -1403,6 +1425,27 @@ export async function investigateCve(
   /* ----------------------------------------------------------------------- */
 
   return {
+    verifications: [
+      verifyCvssClaim({
+        claim: {
+          baseScore: summary.cvss.baseScore ?? undefined,
+          version: summary.cvss.version ?? undefined,
+          vector: summary.cvss.vector ?? undefined,
+          severity: summary.cvss.severity ?? undefined,
+        },
+        observed: summary.cvss,
+        factProvenance,
+      }),
+
+      verifyKevClaim({
+        claim: {
+          listed: true,
+        },
+        observed: kevStatus,
+        factProvenance,
+      }),
+    ],
+
     target: cveId,
 
     targetType: "cve",

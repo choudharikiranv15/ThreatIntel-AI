@@ -17,7 +17,8 @@
     "test:context": "node ./dist/persistence/test-investigation-context.js",
     "test:prior": "node ./dist/persistence/test-investigation-prior.js",
     "test:policy": "node ./dist/persistence/test-investigation-policy.js",
-    "test:verification": "tsx src/verification/verify-claim.test.ts"
+    "test:verification": "tsx src/verification/verify-claim.test.ts",
+    "test:verification:integration": "tsx src/verification/test-engine-integration.ts"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52",

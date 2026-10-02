@@ -68,6 +68,12 @@ export default defineToolPlugin({
           "Never convert an unavailable source into a negative finding.",
           "CISA KEV states must distinguish listed, not-listed, and unknown.",
           "Use the returned structured fields as the source of truth.",
+          "Treat verifications as authoritative claim-status metadata.",
+          "Do not describe a claim as confirmed unless its verification state is confirmed.",
+          "Treat contradicted claims as contradicted, not confirmed.",
+          "Treat unknown claims as unknown, not negative findings.",
+          "Clearly separate confirmed facts, analysis/inferences, and SOC guidance.",
+          "Do not reinterpret conflicting evidence as fact; surface the conflict.",
         ].join(" "),
 
       parameters:

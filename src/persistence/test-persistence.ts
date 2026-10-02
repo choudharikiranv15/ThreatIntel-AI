@@ -9,6 +9,7 @@ async function main(): Promise<void> {
         const testId = `TEST-${Date.now()}`;
 
         const result: InvestigationResult = {
+            verifications: [],
             target: testId,
             targetType: "cve",
             investigationType: "vulnerability",

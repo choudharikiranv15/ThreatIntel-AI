@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 
-import { verifyCvssClaim } from "./verify-claim.js";
+import {
+    verifyCvssClaim,
+    verifyKevClaim,
+} from "./verify-claim.js";
+
 import type {
     CvssDetails,
     EvidenceFactRecord,
@@ -17,11 +21,16 @@ const observed: CvssDetails = {
 const provenance: EvidenceFactRecord[] = [
     {
         id: "fact:nvd:cvss",
-        claim: "NVD CVSS v3.1 base score is 10.0 (CRITICAL).",
+        claim:
+            "NVD CVSS v3.1 base score is 10.0 (CRITICAL).",
         evidenceId: "NVD:CVE-2024-3094",
         field: "cvss",
     },
 ];
+
+/* -------------------------------------------------------------------------- */
+/* CVSS verification                                                          */
+/* -------------------------------------------------------------------------- */
 
 {
     const result = verifyCvssClaim({
@@ -33,10 +42,16 @@ const provenance: EvidenceFactRecord[] = [
     });
 
     assert.equal(result.state, "confirmed");
-    assert.deepEqual(result.supportingFactIds, [
-        "fact:nvd:cvss",
-    ]);
-    assert.deepEqual(result.contradictingFactIds, []);
+
+    assert.deepEqual(
+        result.supportingFactIds,
+        ["fact:nvd:cvss"],
+    );
+
+    assert.deepEqual(
+        result.contradictingFactIds,
+        [],
+    );
 }
 
 {
@@ -49,10 +64,16 @@ const provenance: EvidenceFactRecord[] = [
     });
 
     assert.equal(result.state, "contradicted");
-    assert.deepEqual(result.supportingFactIds, []);
-    assert.deepEqual(result.contradictingFactIds, [
-        "fact:nvd:cvss",
-    ]);
+
+    assert.deepEqual(
+        result.supportingFactIds,
+        [],
+    );
+
+    assert.deepEqual(
+        result.contradictingFactIds,
+        ["fact:nvd:cvss"],
+    );
 }
 
 {
@@ -93,4 +114,94 @@ const provenance: EvidenceFactRecord[] = [
     assert.equal(result.state, "unknown");
 }
 
-console.log("CVSS claim verification tests PASSED");
+/* -------------------------------------------------------------------------- */
+/* CISA KEV verification                                                      */
+/* -------------------------------------------------------------------------- */
+
+{
+    const result = verifyKevClaim({
+        claim: {
+            listed: true,
+        },
+        observed: "listed",
+        factProvenance: [
+            {
+                id: "fact:cisa-kev:listed",
+                claim:
+                    "CVE-2024-3094 is listed in the CISA Known Exploited Vulnerabilities catalog.",
+                evidenceId:
+                    "CISA_KEV:CVE-2024-3094",
+                field: "kev",
+            },
+        ],
+    });
+
+    assert.equal(result.state, "confirmed");
+
+    assert.deepEqual(
+        result.supportingFactIds,
+        ["fact:cisa-kev:listed"],
+    );
+
+    assert.deepEqual(
+        result.contradictingFactIds,
+        [],
+    );
+}
+
+{
+    const result = verifyKevClaim({
+        claim: {
+            listed: true,
+        },
+        observed: "not-listed",
+        factProvenance: [
+            {
+                id: "fact:cisa-kev:absence",
+                claim:
+                    "CVE-2024-3094 is not listed in the CISA Known Exploited Vulnerabilities catalog.",
+                evidenceId:
+                    "CISA_KEV:CVE-2024-3094",
+                field: "kev",
+            },
+        ],
+    });
+
+    assert.equal(result.state, "contradicted");
+
+    assert.deepEqual(
+        result.supportingFactIds,
+        [],
+    );
+
+    assert.deepEqual(
+        result.contradictingFactIds,
+        ["fact:cisa-kev:absence"],
+    );
+}
+
+{
+    const result = verifyKevClaim({
+        claim: {
+            listed: true,
+        },
+        observed: "unknown",
+        factProvenance: [],
+    });
+
+    assert.equal(result.state, "unknown");
+
+    assert.deepEqual(
+        result.supportingFactIds,
+        [],
+    );
+
+    assert.deepEqual(
+        result.contradictingFactIds,
+        [],
+    );
+}
+
+console.log(
+    "CVSS + KEV claim verification tests PASSED",
+);
