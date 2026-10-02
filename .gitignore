@@ -3,3 +3,5 @@ dist/
 .env
 *.log
 .vscode/settings.json
+
+threatintel-data.sql
