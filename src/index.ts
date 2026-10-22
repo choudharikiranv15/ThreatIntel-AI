@@ -12,6 +12,10 @@ import {
   investigateWithPriorPolicy,
 } from "./persistence/investigation-service.js";
 
+import {
+  classifyEvidenceReferences,
+} from "./reference-provenance.js";
+
 export default defineToolPlugin({
   id: "threatintel-ai-engine",
 
@@ -70,6 +74,13 @@ export default defineToolPlugin({
         "Clearly separate confirmed facts, analysis and inferences, and SOC guidance.",
         "Surface conflicting evidence instead of silently resolving conflicts.",
         "A reused investigation is historical persisted intelligence, not a guarantee that the target's current state has not changed.",
+
+        "Distinguish evidence retrieved directly by a provider from URLs merely listed in that provider's record.",
+        "Treat a source reference with retrieved=false as a listed but not independently retrieved URL.",
+        "Never describe an unfetched reference as inspected, verified, corroborating evidence, or an independently confirmed source.",
+        "When reporting source references, explicitly state that they were listed by the parent source and were not independently retrieved.",
+        "Only claim independent corroboration when the corresponding source was actually retrieved and inspected.",
+
       ].join(" "),
 
       parameters: Type.Object({
@@ -131,11 +142,32 @@ export default defineToolPlugin({
 
             target: execution.prior.target,
 
-            investigation:
-              execution.prior.context.investigation,
+            investigation: execution.freshResult
+              ? {
+                ...execution.freshResult,
+                evidence: execution.freshResult.evidence.map(
+                  (item) => ({
+                    ...item,
+                    references: classifyEvidenceReferences(
+                      item.references,
+                    ),
+                  }),
+                ),
+              }
+              : null,
 
-            evidence:
-              execution.prior.context.evidence,
+            evidence: execution.prior.context.evidence.map(
+              (item) => ({
+                ...item,
+                sourceReferences: classifyEvidenceReferences(
+                  item.sourceReferences as {
+                    title: string;
+                    url: string;
+                    retrieved: boolean;
+                  }[],
+                ),
+              }),
+            ),
 
             facts:
               execution.prior.context.facts,

@@ -19,7 +19,11 @@
     "test:policy": "node ./dist/persistence/test-investigation-policy.js",
     "test:verification": "tsx src/verification/verify-claim.test.ts",
     "test:verification:integration": "tsx src/verification/test-engine-integration.ts",
-    "test:service": "node ./dist/persistence/test-investigation-service.js"
+    "test:service": "node ./dist/persistence/test-investigation-service.js",
+    "test:rollback": "node ./dist/persistence/test-rollback.js",
+    "test:integrity": "node ./dist/persistence/test-cross-investigation.js",
+    "test:concurrency": "node ./dist/persistence/test-concurrency.js",
+    "test:reference-provenance": "tsx src/reference-provenance.test.ts"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52",
