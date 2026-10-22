@@ -1,3 +1,4 @@
+
 import type {
     InvestigationStatus,
     ProviderStatus,
@@ -23,6 +24,7 @@ type PriorPolicyInput = {
     providerResults: unknown[];
     limitations: string[];
     evidenceCount: number;
+    evidenceRetrievedAt: string[];
 };
 
 type PersistedProviderResult = {
@@ -30,18 +32,24 @@ type PersistedProviderResult = {
     status: ProviderStatus;
 };
 
+type TimestampAge =
+    | {
+        valid: true;
+        ageHours: number;
+    }
+    | {
+        valid: false;
+        reason: "invalid" | "future";
+    };
+
 function isProviderResult(
     value: unknown,
 ): value is PersistedProviderResult {
-    if (
-        typeof value !== "object" ||
-        value === null
-    ) {
+    if (typeof value !== "object" || value === null) {
         return false;
     }
 
-    const object =
-        value as Record<string, unknown>;
+    const object = value as Record<string, unknown>;
 
     return (
         typeof object.provider === "string" &&
@@ -56,49 +64,66 @@ function isProviderResult(
 
 function providerCompleted(
     providerResults: unknown[],
-    provider: string,
+    providerName: string,
 ): boolean {
-    const result = providerResults
-        .map((value) =>
-            isProviderResult(value)
-                ? value
-                : null,
-        )
-        .find(
-            (value) =>
-                value?.provider === provider,
-        );
+    const matchingResults = providerResults.filter(
+        (value): value is PersistedProviderResult =>
+            isProviderResult(value) &&
+            value.provider === providerName,
+    );
 
-    return (
-        result?.status === "success" ||
-        result?.status === "observed_absence"
+    // Be conservative if duplicate records disagree: at least one
+    // successful completion is required for this provider.
+    return matchingResults.some(
+        (result) =>
+            result.status === "success" ||
+            result.status === "observed_absence",
     );
 }
 
 function calculateAgeHours(
-    createdAt: string,
+    timestamp: string,
     now: Date,
-): number | null {
-    const created =
-        new Date(createdAt);
-
-    if (
-        Number.isNaN(
-            created.getTime(),
-        )
-    ) {
-        return null;
+): TimestampAge {
+    if (typeof timestamp !== "string" || timestamp.trim() === "") {
+        return {
+            valid: false,
+            reason: "invalid",
+        };
     }
 
-    const ageMs =
-        now.getTime() -
-        created.getTime();
+    const timestampMs = Date.parse(timestamp);
 
-    if (ageMs < 0) {
-        return 0;
+    if (!Number.isFinite(timestampMs)) {
+        return {
+            valid: false,
+            reason: "invalid",
+        };
     }
 
-    return ageMs / (1000 * 60 * 60);
+    if (timestampMs > now.getTime()) {
+        return {
+            valid: false,
+            reason: "future",
+        };
+    }
+
+    return {
+        valid: true,
+        ageHours:
+            (now.getTime() - timestampMs) / (1000 * 60 * 60),
+    };
+}
+
+function refreshDecision(
+    reason: string,
+    ageHours: number | null,
+): PriorDecision {
+    return {
+        decision: "refresh",
+        reason,
+        ageHours,
+    };
 }
 
 export function evaluatePriorInvestigation(
@@ -108,107 +133,138 @@ export function evaluatePriorInvestigation(
         maxAgeHours?: number;
     } = {},
 ): PriorDecision {
-    const now =
-        options.now ??
-        new Date();
+    const now = options.now ?? new Date();
 
     const maxAgeHours =
-        options.maxAgeHours ??
-        DEFAULT_PRIOR_MAX_AGE_HOURS;
+        options.maxAgeHours ?? DEFAULT_PRIOR_MAX_AGE_HOURS;
 
-    const ageHours =
-        calculateAgeHours(
-            input.createdAt,
-            now,
+    if (
+        !(now instanceof Date) ||
+        !Number.isFinite(now.getTime())
+    ) {
+        throw new RangeError(
+            "The policy evaluation time must be a valid date.",
         );
-
-    if (ageHours === null) {
-        return {
-            decision: "refresh",
-            reason:
-                "Prior investigation has an invalid creation timestamp.",
-            ageHours: null,
-        };
     }
 
     if (
-        input.status !==
-        "confirmed"
+        !Number.isFinite(maxAgeHours) ||
+        maxAgeHours < 0
     ) {
-        return {
-            decision: "refresh",
-            reason:
-                `Prior investigation status is ${input.status}; only confirmed investigations are eligible for reuse.`,
+        throw new RangeError(
+            "maxAgeHours must be a finite, non-negative number.",
+        );
+    }
+
+    const investigationAge = calculateAgeHours(
+        input.createdAt,
+        now,
+    );
+
+    if (!investigationAge.valid) {
+        return refreshDecision(
+            investigationAge.reason === "future"
+                ? "Prior investigation has a future creation timestamp."
+                : "Prior investigation has an invalid creation timestamp.",
+            null,
+        );
+    }
+
+    const ageHours = investigationAge.ageHours;
+
+    if (input.status !== "confirmed") {
+        return refreshDecision(
+            `Prior investigation status is ${input.status}; only confirmed investigations are eligible for reuse.`,
             ageHours,
-        };
+        );
+    }
+
+    if (ageHours > maxAgeHours) {
+        return refreshDecision(
+            `Prior investigation is ${ageHours.toFixed(1)} hours old, exceeding the ${maxAgeHours}-hour freshness window.`,
+            ageHours,
+        );
+    }
+
+    if (!Array.isArray(input.limitations) || input.limitations.length > 0) {
+        return refreshDecision(
+            "Prior investigation contains unresolved limitations or invalid limitation data.",
+            ageHours,
+        );
     }
 
     if (
-        ageHours >
-        maxAgeHours
+        !Number.isInteger(input.evidenceCount) ||
+        input.evidenceCount <= 0
     ) {
-        return {
-            decision: "refresh",
-            reason:
-                `Prior investigation is ${ageHours.toFixed(1)} hours old, exceeding the ${maxAgeHours}-hour freshness window.`,
+        return refreshDecision(
+            "Prior investigation contains no valid persisted evidence.",
             ageHours,
-        };
+        );
     }
 
     if (
-        input.limitations.length > 0
+        !Array.isArray(input.evidenceRetrievedAt) ||
+        input.evidenceRetrievedAt.length !== input.evidenceCount
     ) {
-        return {
-            decision: "refresh",
-            reason:
-                "Prior investigation contains unresolved limitations.",
+        return refreshDecision(
+            "Evidence retrieval timestamps are missing or incomplete.",
             ageHours,
-        };
+        );
+    }
+
+    const evidenceAges = input.evidenceRetrievedAt.map(
+        (timestamp) => calculateAgeHours(timestamp, now),
+    );
+
+    const invalidEvidenceTimestamp = evidenceAges.find(
+        (result) => !result.valid,
+    );
+
+    if (invalidEvidenceTimestamp && !invalidEvidenceTimestamp.valid) {
+        return refreshDecision(
+            invalidEvidenceTimestamp.reason === "future"
+                ? "At least one evidence record has a future retrieval timestamp."
+                : "At least one evidence record has an invalid retrieval timestamp.",
+            ageHours,
+        );
+    }
+
+    // All timestamps are valid after the check above.
+    const oldestEvidenceAgeHours = Math.max(
+        ...evidenceAges.map((result) =>
+            result.valid ? result.ageHours : 0,
+        ),
+    );
+
+    if (oldestEvidenceAgeHours > maxAgeHours) {
+        return refreshDecision(
+            `Oldest evidence is ${oldestEvidenceAgeHours.toFixed(1)} hours old, exceeding the ${maxAgeHours}-hour freshness window.`,
+            ageHours,
+        );
     }
 
     if (
-        input.evidenceCount === 0
+        !Array.isArray(input.providerResults) ||
+        !providerCompleted(input.providerResults, "NVD")
     ) {
-        return {
-            decision: "refresh",
-            reason:
-                "Prior investigation contains no persisted evidence.",
+        return refreshDecision(
+            "Prior investigation does not contain a completed NVD check.",
             ageHours,
-        };
+        );
     }
 
-    if (
-        !providerCompleted(
-            input.providerResults,
-            "NVD",
-        )
-    ) {
-        return {
-            decision: "refresh",
-            reason:
-                "Prior investigation does not contain a completed NVD check.",
+    if (!providerCompleted(input.providerResults, "CISA_KEV")) {
+        return refreshDecision(
+            "Prior investigation does not contain a completed CISA KEV check.",
             ageHours,
-        };
-    }
-
-    if (
-        !providerCompleted(
-            input.providerResults,
-            "CISA_KEV",
-        )
-    ) {
-        return {
-            decision: "refresh",
-            reason:
-                "Prior investigation does not contain a completed CISA KEV check.",
-            ageHours,
-        };
+        );
     }
 
     return {
         decision: "reuse",
         reason:
-            `Prior investigation is confirmed, complete, evidence-backed, and ${ageHours.toFixed(1)} hours old.`,
+            `Prior investigation is confirmed, complete, evidence-backed, and ${ageHours.toFixed(1)} hours old; all evidence is within the freshness window.`,
         ageHours,
     };
 }

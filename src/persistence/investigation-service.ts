@@ -1,14 +1,10 @@
+
 import type { InvestigationResult } from "../types.js";
-
-import {
-    investigateCve,
-} from "../engine.js";
-
+import { investigateCve } from "../engine.js";
 import {
     persistInvestigationResult,
     type PersistenceResult,
 } from "./index.js";
-
 import {
     getPriorInvestigation,
     type PriorInvestigationResult,
@@ -21,17 +17,37 @@ export type InvestigationExecutionResult = {
     persistence: PersistenceResult | null;
 };
 
+type ServiceDependencies = {
+    getPrior: typeof getPriorInvestigation;
+    investigate: typeof investigateCve;
+    persist: typeof persistInvestigationResult;
+};
+
+const defaultDependencies: ServiceDependencies = {
+    getPrior: getPriorInvestigation,
+    investigate: investigateCve,
+    persist: persistInvestigationResult,
+};
+
 export async function investigateWithPriorPolicy(
     target: string,
     options: {
         nvdApiKey?: string;
         requestTimeoutMs?: number;
+        forceRefresh?: boolean;
     } = {},
+    dependencies: ServiceDependencies = defaultDependencies,
 ): Promise<InvestigationExecutionResult> {
-    const prior =
-        await getPriorInvestigation(target);
+    const normalizedTarget = target.trim().toUpperCase();
+
+    if (!normalizedTarget) {
+        throw new Error("Investigation target must not be empty.");
+    }
+
+    const prior = await dependencies.getPrior(normalizedTarget);
 
     if (
+        !options.forceRefresh &&
         prior.found &&
         prior.decision?.decision === "reuse" &&
         prior.context
@@ -44,23 +60,16 @@ export async function investigateWithPriorPolicy(
         };
     }
 
-    const freshResult =
-        await investigateCve(
-            target,
-            {
-                nvdApiKey:
-                    options.nvdApiKey,
-
-                requestTimeoutMs:
-                    options.requestTimeoutMs ??
-                    15000,
-            },
-        );
+    const freshResult = await dependencies.investigate(
+        normalizedTarget,
+        {
+            nvdApiKey: options.nvdApiKey,
+            requestTimeoutMs: options.requestTimeoutMs ?? 15000,
+        },
+    );
 
     const persistence =
-        await persistInvestigationResult(
-            freshResult,
-        );
+        await dependencies.persist(freshResult);
 
     return {
         mode: "refreshed",

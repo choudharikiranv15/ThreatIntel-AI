@@ -18,7 +18,8 @@
     "test:prior": "node ./dist/persistence/test-investigation-prior.js",
     "test:policy": "node ./dist/persistence/test-investigation-policy.js",
     "test:verification": "tsx src/verification/verify-claim.test.ts",
-    "test:verification:integration": "tsx src/verification/test-engine-integration.ts"
+    "test:verification:integration": "tsx src/verification/test-engine-integration.ts",
+    "test:service": "node ./dist/persistence/test-investigation-service.js"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52",

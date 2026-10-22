@@ -1,3 +1,4 @@
+
 import { findInvestigationHistory } from "./investigation-history.js";
 
 import {
@@ -29,16 +30,21 @@ export type PriorInvestigationResult = {
 export async function getPriorInvestigation(
     target: string,
 ): Promise<PriorInvestigationResult> {
-    const history =
-        await findInvestigationHistory(
-            target,
-        );
+    const normalizedTarget = target.trim().toUpperCase();
 
-    if (
-        history.length === 0
-    ) {
+    if (!normalizedTarget) {
+        throw new Error(
+            "Investigation target must not be empty.",
+        );
+    }
+
+    const history = await findInvestigationHistory(
+        normalizedTarget,
+    );
+
+    if (history.length === 0) {
         return {
-            target,
+            target: normalizedTarget,
             found: false,
             latestInvestigation: null,
             decision: {
@@ -51,23 +57,20 @@ export async function getPriorInvestigation(
         };
     }
 
-    const latest =
-        history[0];
+    const latest = history[0];
 
-    const context =
-        await getInvestigationContext(
-            latest.id,
-        );
+    const context = await getInvestigationContext(
+        latest.id,
+    );
 
     if (!context) {
         return {
-            target,
+            target: normalizedTarget,
             found: true,
             latestInvestigation: {
                 id: latest.id,
                 status: latest.status,
-                createdAt:
-                    latest.createdAt,
+                createdAt: latest.createdAt,
             },
             decision: {
                 decision: "refresh",
@@ -79,35 +82,32 @@ export async function getPriorInvestigation(
         };
     }
 
-    const decision =
-        evaluatePriorInvestigation({
-            status:
-                context.investigation.status,
+    const decision = evaluatePriorInvestigation({
+        status: context.investigation.status,
 
-            createdAt:
-                context.investigation.createdAt,
+        createdAt: context.investigation.createdAt,
 
-            providerResults:
-                context.investigation
-                    .providerResults,
+        providerResults:
+            context.investigation.providerResults,
 
-            limitations:
-                context.investigation
-                    .limitations,
+        limitations:
+            context.investigation.limitations,
 
-            evidenceCount:
-                context.evidence.length,
-        });
+        evidenceCount: context.evidence.length,
+        evidenceRetrievedAt:
+            context.evidence.map(
+                (evidence) => evidence.retrievedAt,
+            ),
+    });
 
     return {
-        target,
+        target: normalizedTarget,
         found: true,
 
         latestInvestigation: {
             id: latest.id,
             status: latest.status,
-            createdAt:
-                latest.createdAt,
+            createdAt: latest.createdAt,
         },
 
         decision,
