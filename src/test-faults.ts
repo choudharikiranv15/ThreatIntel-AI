@@ -62,7 +62,8 @@ function successEvidence(
 function absenceProvider(
     source:
         | "NVD"
-        | "CISA_KEV",
+        | "CISA_KEV"
+        | "REDHAT",
 ): ProviderResult {
     return {
         provider: source,
@@ -77,7 +78,8 @@ function absenceProvider(
 function failureProvider(
     source:
         | "NVD"
-        | "CISA_KEV",
+        | "CISA_KEV"
+        | "REDHAT",
 ): ProviderResult {
     return {
         provider: source,
@@ -93,7 +95,8 @@ function failureProvider(
 function timeoutProvider(
     source:
         | "NVD"
-        | "CISA_KEV",
+        | "CISA_KEV"
+        | "REDHAT",
 ): ProviderResult {
     return {
         provider: source,
@@ -126,6 +129,12 @@ function timeoutProvider(
                     cisaKev: fakeProvider(
                         absenceProvider(
                             "CISA_KEV",
+                        ),
+                    ),
+
+                    redhat: fakeProvider(
+                        absenceProvider(
+                            "REDHAT",
                         ),
                     ),
                 },
@@ -190,6 +199,12 @@ function timeoutProvider(
                             "CISA_KEV",
                         ),
                     ),
+
+                    redhat: fakeProvider(
+                        absenceProvider(
+                            "REDHAT",
+                        ),
+                    ),
                 },
             },
         );
@@ -232,6 +247,12 @@ function timeoutProvider(
                     cisaKev: fakeProvider(
                         timeoutProvider(
                             "CISA_KEV",
+                        ),
+                    ),
+
+                    redhat: fakeProvider(
+                        absenceProvider(
+                            "REDHAT",
                         ),
                     ),
                 },
@@ -290,6 +311,12 @@ function timeoutProvider(
                             "CISA_KEV",
                         ),
                     ),
+
+                    redhat: fakeProvider(
+                        failureProvider(
+                            "REDHAT" as any,
+                        ),
+                    ),
                 },
             },
         );
@@ -340,6 +367,12 @@ function timeoutProvider(
                             "CISA_KEV",
                         ),
                     ),
+
+                    redhat: fakeProvider(
+                        absenceProvider(
+                            "REDHAT" as any,
+                        ),
+                    ),
                 },
             },
         );
@@ -377,6 +410,12 @@ function timeoutProvider(
                     cisaKev: fakeProvider(
                         timeoutProvider(
                             "CISA_KEV",
+                        ),
+                    ),
+
+                    redhat: fakeProvider(
+                        timeoutProvider(
+                            "REDHAT" as any,
                         ),
                     ),
                 },

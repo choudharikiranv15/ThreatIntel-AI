@@ -24,6 +24,7 @@ const investigationWithCvss: InvestigationResult = {
         kevStatus: "not-listed",
         cwe: [],
         affectedVersions: [],
+        vendorImpact: [],
     },
 
     confirmedFacts: [

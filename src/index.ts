@@ -22,7 +22,7 @@ export default defineToolPlugin({
   name: "ThreatIntel AI Engine",
 
   description:
-    "Evidence-first threat intelligence investigation engine. Currently supports CVE investigations using NVD and CISA KEV, plus retrieval of previously persisted investigation context.",
+    "Evidence-first threat intelligence investigation engine. Supports CVE investigations using NVD, CISA KEV, and Red Hat Security Data API. Provides vendor-specific product impact assessments and retrieval of previously persisted investigation context.",
 
   configSchema: Type.Object({
     nvdApiKey: Type.Optional(
@@ -56,13 +56,14 @@ export default defineToolPlugin({
       description: [
         "Investigate a cybersecurity target using authoritative threat intelligence sources.",
         "Currently supports CVE identifiers.",
+        "Uses NVD (primary vulnerability data), CISA KEV (known exploitation), and Red Hat Security Data API (vendor product impact).",
         "Check persisted investigation context before performing a fresh investigation.",
         "Reuse prior results only when the deterministic freshness and completeness policy allows reuse.",
         "Set forceRefresh=true when the analyst explicitly requests fresh evidence.",
-        "Otherwise perform a fresh investigation using NVD and CISA KEV when required.",
+        "Otherwise perform a fresh investigation using all available providers when required.",
         "Fresh investigations are persisted automatically when persistence succeeds.",
         "Always report persistence failures explicitly; never claim that an investigation was saved when persistence failed.",
-        "Return structured evidence including severity, CVSS, affected versions when explicitly available, CISA KEV status, evidence sources, confirmed facts, inferences, limitations, and SOC analyst guidance.",
+        "Return structured evidence including severity, CVSS, affected versions when explicitly available, CISA KEV status, vendor product impact assessments, evidence sources, confirmed facts, inferences, limitations, and SOC analyst guidance.",
         "Report affected versions only when supported by explicit vulnerability evidence; do not infer affected status from a product's mere presence in NVD metadata.",
         "Distinguish upstream software vulnerability status from vendor-specific product status.",
         "Do not claim that a vendor product or operating-system release is affected unless the retrieved evidence explicitly supports that conclusion.",

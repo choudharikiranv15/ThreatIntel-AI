@@ -30,6 +30,7 @@ function createResult(
             kevStatus: "not-listed",
             cwe: ["CWE-79"],
             affectedVersions: ["1.0.0"],
+            vendorImpact: [],
         },
 
         confirmedFacts: [claim],

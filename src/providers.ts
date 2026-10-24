@@ -10,7 +10,12 @@ export type CisaKevProvider = (
     cveId: string,
 ) => Promise<ProviderResult>;
 
+export type RedHatProvider = (
+    cveId: string,
+) => Promise<ProviderResult>;
+
 export type InvestigationProviders = {
     nvd: NvdProvider;
     cisaKev: CisaKevProvider;
+    redhat: RedHatProvider;
 };

@@ -11,6 +11,10 @@ import {
 } from "./sources/cisa-kev.js";
 
 import {
+  fetchRedHatCve,
+} from "./sources/redhat.js";
+
+import {
   verifyCvssClaim,
   verifyKevClaim,
   type CvssClaim,
@@ -691,6 +695,217 @@ function extractCisaFacts(
 }
 
 /* -------------------------------------------------------------------------- */
+/* Red Hat facts                                                              */
+/* -------------------------------------------------------------------------- */
+
+function extractRedHatFacts(
+  cveId: string,
+  evidence: Evidence,
+): string[] {
+  const facts: string[] = [];
+
+  const source =
+    evidence.facts;
+
+  facts.push(
+    `${cveId} has a Red Hat Security Data API record.`,
+  );
+
+  const threatSeverity =
+    getString(
+      source,
+      "threat_severity",
+    );
+
+  if (threatSeverity) {
+    facts.push(
+      `Red Hat threat severity: ${threatSeverity}.`,
+    );
+  }
+
+  const statement =
+    getString(
+      source,
+      "statement",
+    );
+
+  if (statement) {
+    facts.push(
+      `Red Hat statement: ${statement}`,
+    );
+  }
+
+  return facts;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Red Hat vendor impact extraction                                           */
+/* -------------------------------------------------------------------------- */
+
+function normalizeRedHatFixState(
+  fixState: string | undefined,
+): {
+  status: "affected" | "not_affected" | "unknown";
+  reason: string;
+} {
+  if (!fixState) {
+    return {
+      status: "unknown",
+      reason: "No fix_state provided",
+    };
+  }
+
+  const normalized =
+    fixState.trim().toLowerCase();
+
+  /*
+   * Red Hat fix_state values:
+   *
+   * Recognized states from the API documentation and observed values:
+   * - "Affected"
+   * - "Not affected"
+   * - "Fix deferred"
+   * - "Will not fix"
+   * - "Out of support scope"
+   * - "New"
+   * - "Under investigation"
+   */
+
+  if (normalized === "affected") {
+    return {
+      status: "affected",
+      reason: fixState,
+    };
+  }
+
+  if (normalized === "not affected") {
+    return {
+      status: "not_affected",
+      reason: fixState,
+    };
+  }
+
+  /*
+   * All other states are treated as unknown.
+   *
+   * This includes:
+   * - "Fix deferred" (not yet fixed, but also not explicitly "affected")
+   * - "Will not fix" (ambiguous - affected but won't be fixed?)
+   * - "Out of support scope"
+   * - "Under investigation"
+   * - Any unrecognized values
+   */
+  return {
+    status: "unknown",
+    reason: fixState,
+  };
+}
+
+function extractRedHatVendorImpact(
+  cveId: string,
+  evidence: Evidence,
+): Array<{
+  vendor: string;
+  productName: string;
+  packageName: string;
+  cpe: string | null;
+  status: "affected" | "not_affected" | "unknown";
+  originalStatus: string;
+  sourceUrl: string;
+  retrievedAt: string;
+  evidenceId: string;
+  reason: string;
+}> {
+  const packageState =
+    evidence.facts.package_state;
+
+  if (!Array.isArray(packageState)) {
+    return [];
+  }
+
+  const assessments: Array<{
+    vendor: string;
+    productName: string;
+    packageName: string;
+    cpe: string | null;
+    status: "affected" | "not_affected" | "unknown";
+    originalStatus: string;
+    sourceUrl: string;
+    retrievedAt: string;
+    evidenceId: string;
+    reason: string;
+  }> = [];
+
+  for (
+    const state of packageState
+  ) {
+    if (
+      typeof state !== "object" ||
+      state === null ||
+      Array.isArray(state)
+    ) {
+      continue;
+    }
+
+    const stateObject =
+      state as Record<
+        string,
+        unknown
+      >;
+
+    const productName =
+      getString(
+        stateObject,
+        "product_name",
+      );
+
+    const packageName =
+      getString(
+        stateObject,
+        "package_name",
+      );
+
+    const fixState =
+      getString(
+        stateObject,
+        "fix_state",
+      );
+
+    const cpe =
+      getString(
+        stateObject,
+        "cpe",
+      ) ?? null;
+
+    if (!productName || !packageName) {
+      continue;
+    }
+
+    const normalized =
+      normalizeRedHatFixState(
+        fixState,
+      );
+
+    assessments.push({
+      vendor: "Red Hat",
+      productName,
+      packageName,
+      cpe,
+      status: normalized.status,
+      originalStatus:
+        fixState ?? "unknown",
+      sourceUrl: evidence.url,
+      retrievedAt:
+        evidence.retrievedAt,
+      evidenceId: evidence.id,
+      reason: normalized.reason,
+    });
+  }
+
+  return assessments;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Inferences                                                                 */
 /* -------------------------------------------------------------------------- */
 
@@ -957,6 +1172,8 @@ export async function investigateCve(
         cwe: [],
 
         affectedVersions: [],
+
+        vendorImpact: [],
       },
 
       confirmedFacts: [],
@@ -983,6 +1200,8 @@ export async function investigateCve(
   const evidence: Evidence[] = [];
 
   const limitations: string[] = [];
+
+  const coreLimitations: string[] = [];
 
   const confirmedFacts: string[] = [];
   const factProvenance: EvidenceFactRecord[] = [];
@@ -1022,11 +1241,22 @@ export async function investigateCve(
         config.requestTimeoutMs,
       ),
 
+    redhat: (
+      cveId,
+    ) =>
+      fetchRedHatCve(
+        cveId,
+        {
+          timeoutMs:
+            config.requestTimeoutMs,
+        },
+      ),
+
     ...config.providers,
   };
 
   /*
-   * NVD and CISA are independent sources.
+   * NVD, CISA, and Red Hat are independent sources.
    *
    * Run them concurrently so a slow source does not unnecessarily block
    * another independent source.
@@ -1039,10 +1269,12 @@ export async function investigateCve(
   const [
     nvdSettled,
     cisaSettled,
+    redhatSettled,
   ] =
     await Promise.allSettled([
       providers.nvd(cveId),
       providers.cisaKev(cveId),
+      providers.redhat(cveId),
     ]);
 
   const providerResults: ProviderResult[] = [];
@@ -1096,6 +1328,30 @@ export async function investigateCve(
     cisaProviderResult,
   );
 
+  let redhatProviderResult: ProviderResult;
+
+  if (redhatSettled.status === "fulfilled") {
+    redhatProviderResult =
+      normalizeInvalidProviderResult(
+        redhatSettled.value,
+        "REDHAT",
+      );
+  } else {
+    redhatProviderResult = {
+      provider: "REDHAT",
+      status: "error",
+      evidence: null,
+      error:
+        redhatSettled.reason instanceof Error
+          ? redhatSettled.reason.message
+          : String(redhatSettled.reason),
+      checkedAt:
+        new Date().toISOString(),
+    };
+  }
+
+  providerResults.push(redhatProviderResult);
+
   /* ----------------------------------------------------------------------- */
   /* NVD                                                                      */
   /* ----------------------------------------------------------------------- */
@@ -1126,9 +1382,9 @@ export async function investigateCve(
     nvdProviderResult.status ===
     "observed_absence"
   ) {
-    limitations.push(
-      `NVD successfully responded but returned no matching record for ${cveId}.`,
-    );
+    const message = `NVD successfully responded but returned no matching record for ${cveId}.`;
+    limitations.push(message);
+    coreLimitations.push(message);
   }
 
   const nvdFailure =
@@ -1138,6 +1394,9 @@ export async function investigateCve(
 
   if (nvdFailure) {
     limitations.push(
+      nvdFailure,
+    );
+    coreLimitations.push(
       nvdFailure,
     );
   }
@@ -1200,6 +1459,9 @@ export async function investigateCve(
       "unknown";
 
     limitations.push(
+      cisaFailure,
+    );
+    coreLimitations.push(
       cisaFailure,
     );
   }
@@ -1268,6 +1530,64 @@ export async function investigateCve(
   }
 
   /* ----------------------------------------------------------------------- */
+  /* Red Hat                                                                  */
+  /* ----------------------------------------------------------------------- */
+
+  let redhatEvidence:
+    | Evidence
+    | undefined;
+
+  if (
+    redhatProviderResult.status ===
+    "success" &&
+    redhatProviderResult.evidence
+  ) {
+    redhatEvidence = assignEvidenceId(
+      cveId,
+      redhatProviderResult.evidence,
+    );
+
+    evidence.push(redhatEvidence);
+  }
+
+  const redhatFailure =
+    providerFailureLimitation(
+      redhatProviderResult,
+    );
+
+  if (redhatFailure) {
+    limitations.push(
+      redhatFailure,
+    );
+  }
+
+  /* ----------------------------------------------------------------------- */
+  /* Vendor impact extraction                                                 */
+  /* ----------------------------------------------------------------------- */
+
+  const vendorImpact =
+    redhatEvidence
+      ? extractRedHatVendorImpact(
+        cveId,
+        redhatEvidence,
+      )
+      : [];
+
+  if (redhatEvidence) {
+    for (const fact of extractRedHatFacts(
+      cveId,
+      redhatEvidence,
+    )) {
+      addConfirmedFact(
+        confirmedFacts,
+        factProvenance,
+        fact,
+        redhatEvidence.id,
+      );
+    }
+  }
+
+  /* ----------------------------------------------------------------------- */
   /* Summary                                                                  */
   /* ----------------------------------------------------------------------- */
 
@@ -1296,6 +1616,8 @@ export async function investigateCve(
     cwe: cwes,
 
     affectedVersions,
+
+    vendorImpact,
   };
 
   /* ----------------------------------------------------------------------- */
@@ -1341,23 +1663,26 @@ export async function investigateCve(
   /*
    * CONFIRMED
    *
-   * Both authoritative providers completed their checks successfully.
+   * Both authoritative providers (NVD and CISA) completed their checks successfully.
    *
    * CISA observed absence counts as a completed check. It should NOT force
    * the whole investigation into "partial" merely because there is no KEV
    * record.
    *
+   * Red Hat enrichment failures do NOT affect the core investigation status.
+   *
    * Example:
    *
    * NVD = success
    * CISA = observed_absence
+   * Red Hat = error
    *
    * => confirmed
    */
   if (
     nvdCompleted &&
     cisaCompleted &&
-    limitations.length === 0
+    coreLimitations.length === 0
   ) {
     status =
       "confirmed";
@@ -1386,11 +1711,11 @@ export async function investigateCve(
   /*
    * FAILED
    *
-   * No usable evidence was returned and one or more provider failures
+   * No usable evidence was returned and one or more core provider failures
    * occurred.
    */
   else if (
-    limitations.length > 0
+    coreLimitations.length > 0
   ) {
     status =
       "failed";

@@ -1,7 +1,7 @@
 {
   "id": "threatintel-ai-engine",
   "name": "ThreatIntel AI Engine",
-  "description": "Evidence-first threat intelligence investigation engine. Currently supports CVE investigations using NVD and CISA KEV, plus retrieval of previously persisted investigation context.",
+  "description": "Evidence-first threat intelligence investigation engine. Supports CVE investigations using NVD, CISA KEV, and Red Hat Security Data API. Provides vendor-specific product impact assessments and retrieval of previously persisted investigation context.",
   "version": "0.2.0",
   "configSchema": {
     "type": "object",

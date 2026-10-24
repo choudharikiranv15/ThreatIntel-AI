@@ -1,6 +1,7 @@
 export type SourceId =
   | "NVD"
-  | "CISA_KEV";
+  | "CISA_KEV"
+  | "REDHAT";
 
 export type SourceType =
   | "primary"
@@ -131,6 +132,33 @@ export type ProviderResult = {
   checkedAt: string;
 };
 
+export type VendorImpactStatus =
+  | "affected"
+  | "not_affected"
+  | "unknown";
+
+export type VendorImpactAssessment = {
+  vendor: string;
+
+  productName: string;
+
+  packageName: string;
+
+  cpe: string | null;
+
+  status: VendorImpactStatus;
+
+  originalStatus: string;
+
+  sourceUrl: string;
+
+  retrievedAt: string;
+
+  evidenceId: string;
+
+  reason: string;
+};
+
 export type InvestigationSummary = {
   severity: string | null;
 
@@ -141,6 +169,8 @@ export type InvestigationSummary = {
   cwe: string[];
 
   affectedVersions: string[];
+
+  vendorImpact: VendorImpactAssessment[];
 };
 
 export type InvestigationResult = {
