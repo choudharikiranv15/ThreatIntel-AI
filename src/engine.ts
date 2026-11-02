@@ -15,6 +15,18 @@ import {
 } from "./sources/redhat.js";
 
 import {
+  fetchOsvRecord,
+} from "./sources/osv.js";
+
+import {
+  buildAssessment,
+} from "./correlation/assessment.js";
+
+import {
+  correlate,
+} from "./correlation/correlate.js";
+
+import {
   verifyCvssClaim,
   type CvssClaim,
 } from "./verification/index.js";
@@ -22,12 +34,12 @@ import {
 import type {
   ClaimVerification,
   Evidence,
-  EvidenceConflict,
   EvidenceFactRecord,
   InferenceRecord,
   InvestigationResult,
   KevStatus,
   CvssDetails,
+  PackageFix,
   ProviderResult,
   VendorImpactAssessment,
 } from "./types.js";
@@ -1000,76 +1012,68 @@ function extractRedHatVendorImpact(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Conflicting evidence                                                       */
+/* OSV package fixes                                                          */
 /* -------------------------------------------------------------------------- */
 
-function findCvssConflicts(
-  cvss: CvssDetails,
-  nvdEvidence: Evidence | undefined,
-  redhatEvidence: Evidence | undefined,
-): EvidenceConflict[] {
-  if (cvss.baseScore === null) {
-    return [];
-  }
+function extractPackageFixes(
+  evidence: Evidence,
+): PackageFix[] {
+  const fixes = new Map<string, PackageFix>();
 
-  const scores = new Map<string, number>([
-    [cvss.source ?? "NVD", cvss.baseScore],
-  ]);
+  for (const advisory of getArray(evidence.facts, "advisories") ?? []) {
+    const record = advisory as Record<string, unknown>;
 
-  const metrics =
-    nvdEvidence
-      ? getNestedObject(
-        nvdEvidence.facts,
-        "metrics",
-      ) ?? {}
-      : {};
+    // Unreviewed and withdrawn advisories are not treated as fix evidence.
+    if (record.reviewed !== true || record.withdrawn) {
+      continue;
+    }
 
-  for (const list of Object.values(metrics)) {
-    for (const metric of Array.isArray(list) ? list : []) {
-      const object = (metric ?? {}) as Record<string, unknown>;
+    for (const item of getArray(record, "packages") ?? []) {
+      const row = item as Record<string, unknown>;
 
-      const data =
-        getNestedObject(object, "cvssData");
+      const ecosystem = getString(row, "ecosystem");
+      const name = getString(row, "name");
 
-      const score =
-        data && getNumber(data, "baseScore");
+      if (!ecosystem || !name) {
+        continue;
+      }
 
-      if (
-        score !== undefined &&
-        data?.version === cvss.version
-      ) {
-        const source =
-          getString(object, "source") ?? "NVD";
+      const key = `${ecosystem}/${name}`;
 
-        if (!scores.has(source)) {
-          scores.set(source, score);
+      const fix: PackageFix = fixes.get(key) ?? {
+        ecosystem,
+        package: name,
+        fixedVersions: [],
+        lastAffectedVersions: [],
+        advisoryId: String(record.id),
+      };
+
+      for (const event of getArray(row, "events") ?? []) {
+        const { fixed, last_affected: lastAffected } =
+          event as Record<string, unknown>;
+
+        if (typeof fixed === "string" && !fix.fixedVersions.includes(fixed)) {
+          fix.fixedVersions.push(fixed);
+        }
+
+        if (
+          typeof lastAffected === "string" &&
+          !fix.lastAffectedVersions.includes(lastAffected)
+        ) {
+          fix.lastAffectedVersions.push(lastAffected);
         }
       }
+
+      fixes.set(key, fix);
     }
   }
 
-  const redhatScore =
-    redhatEvidence && cvss.version?.startsWith("3")
-      ? redHatCvssScore(redhatEvidence)
-      : null;
-
-  if (redhatScore !== null) {
-    scores.set("Red Hat", redhatScore);
-  }
-
-  if (new Set(scores.values()).size < 2) {
-    return [];
-  }
-
-  return [
-    {
-      field: "cvss.baseScore",
-      values: Array.from(
-        scores,
-        ([source, value]) => ({ source, value }),
-      ),
-    },
-  ];
+  // Actionable entries first, since long lists are capped for the LLM.
+  return [...fixes.values()].sort(
+    (a, b) =>
+      Number(b.fixedVersions.length > 0) -
+      Number(a.fixedVersions.length > 0),
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1423,6 +1427,19 @@ export async function investigateCve(
         },
       ),
 
+    // A caller supplying its own providers has chosen the set to check.
+    osv: config.providers
+      ? null
+      : (cveId) =>
+        fetchOsvRecord(
+          cveId,
+          {
+            timeoutMs:
+              config.requestTimeoutMs,
+            signal: config.signal,
+          },
+        ),
+
     ...config.providers,
   };
 
@@ -1441,11 +1458,15 @@ export async function investigateCve(
     nvdSettled,
     cisaSettled,
     redhatSettled,
+    osvSettled,
   ] =
     await Promise.allSettled([
       providers.nvd(cveId),
       providers.cisaKev(cveId),
       providers.redhat(cveId),
+      providers.osv
+        ? providers.osv(cveId)
+        : Promise.resolve(null),
     ]);
 
   const providerResults: ProviderResult[] = [];
@@ -1522,6 +1543,32 @@ export async function investigateCve(
   }
 
   providerResults.push(redhatProviderResult);
+
+  let osvProviderResult: ProviderResult | null = null;
+
+  if (osvSettled.status === "rejected") {
+    osvProviderResult = {
+      provider: "OSV",
+      status: "error",
+      evidence: null,
+      error:
+        osvSettled.reason instanceof Error
+          ? osvSettled.reason.message
+          : String(osvSettled.reason),
+      checkedAt:
+        new Date().toISOString(),
+    };
+  } else if (osvSettled.value !== null) {
+    osvProviderResult =
+      normalizeInvalidProviderResult(
+        osvSettled.value,
+        "OSV",
+      );
+  }
+
+  if (osvProviderResult) {
+    providerResults.push(osvProviderResult);
+  }
 
   /* ----------------------------------------------------------------------- */
   /* NVD                                                                      */
@@ -1770,6 +1817,98 @@ export async function investigateCve(
     }
   }
 
+  if (redhatEvidence && vendorImpact.length > 0) {
+    const counts = ["fixed", "affected", "not_affected", "unknown"]
+      .map((status) => [
+        status,
+        vendorImpact.filter((row) => row.status === status).length,
+      ] as const)
+      .filter(([, count]) => count > 0)
+      .map(([status, count]) => `${count} ${status}`);
+
+    addConfirmedFact(
+      confirmedFacts,
+      factProvenance,
+      `Red Hat assesses ${vendorImpact.length} product packages: ${counts.join(", ")}.`,
+      redhatEvidence.id,
+      "redhatImpact",
+    );
+  }
+
+  /* ----------------------------------------------------------------------- */
+  /* OSV                                                                      */
+  /* ----------------------------------------------------------------------- */
+
+  let osvEvidence:
+    | Evidence
+    | undefined;
+
+  if (
+    osvProviderResult?.status === "success" &&
+    osvProviderResult.evidence
+  ) {
+    osvEvidence = assignEvidenceId(
+      cveId,
+      osvProviderResult.evidence,
+    );
+
+    evidence.push(osvEvidence);
+  }
+
+  const osvFailure =
+    osvProviderResult
+      ? providerFailureLimitation(osvProviderResult)
+      : null;
+
+  /*
+   * OSV only enriches an investigation, so these stay out of its limitations:
+   * they must be visible, but not stop complete core evidence being reused.
+   */
+  const enrichmentLimitations: string[] =
+    osvFailure ? [osvFailure] : [];
+
+  const listAdvisories = (key: string): unknown[] =>
+    osvEvidence
+      ? getArray(osvEvidence.facts, key) ?? []
+      : [];
+
+  const failedAdvisories = listAdvisories("advisoriesFailed");
+  const missingAdvisories = listAdvisories("advisoriesNotFound");
+  const omittedAdvisories = listAdvisories("advisoriesOmitted");
+
+  if (failedAdvisories.length > 0) {
+    enrichmentLimitations.push(
+      `OSV advisory ${failedAdvisories.join(", ")} could not be retrieved, so package fix data may be incomplete.`,
+    );
+  }
+
+  if (missingAdvisories.length > 0) {
+    enrichmentLimitations.push(
+      `OSV lists advisory ${missingAdvisories.join(", ")}, but it was not found or does not name this CVE, so it was not used.`,
+    );
+  }
+
+  if (omittedAdvisories.length > 0) {
+    enrichmentLimitations.push(
+      `OSV advisory ${omittedAdvisories.join(", ")} was not followed because of the per-CVE limit, so package fix data is incomplete.`,
+    );
+  }
+
+  const packageFixes =
+    osvEvidence
+      ? extractPackageFixes(osvEvidence)
+      : [];
+
+  if (osvEvidence && packageFixes.length > 0) {
+    addConfirmedFact(
+      confirmedFacts,
+      factProvenance,
+      `A reviewed OSV advisory (${packageFixes[0].advisoryId}) covers ${packageFixes.length} ecosystem packages.`,
+      osvEvidence.id,
+      "osvPackages",
+    );
+  }
+
   /* ----------------------------------------------------------------------- */
   /* Summary                                                                  */
   /* ----------------------------------------------------------------------- */
@@ -1802,12 +1941,27 @@ export async function investigateCve(
 
     vendorImpact,
 
-    conflicts:
-      findCvssConflicts(
-        cvss,
+    packageFixes,
+
+    enrichmentLimitations,
+
+    correlations:
+      correlate({
+        cvss: {
+          ...cvss,
+          severity,
+        },
+        severity,
+        kevStatus,
         nvdEvidence,
+        kevEvidence: cisaEvidence,
         redhatEvidence,
-      ),
+        osvEvidence,
+        nvdStatus: nvdProviderResult.status,
+        affectedVersions,
+        vendorImpact,
+        packageFixes,
+      }),
   };
 
   /* ----------------------------------------------------------------------- */
@@ -1827,6 +1981,14 @@ export async function investigateCve(
 
   const inferenceProvenance =
     inferenceResult.provenance;
+
+  summary.assessment =
+    buildAssessment(
+      summary,
+      factProvenance,
+      inferenceProvenance,
+      providerResults,
+    );
 
   /* ----------------------------------------------------------------------- */
   /* Status                                                                   */

@@ -7,6 +7,10 @@ import {
     type PersistenceResult,
 } from "./index.js";
 import {
+    compareWithBaseline,
+    type InvestigationComparison,
+} from "./investigation-diff.js";
+import {
     getPriorInvestigation,
     type PriorInvestigationResult,
 } from "./investigation-prior.js";
@@ -16,12 +20,17 @@ export type InvestigationExecutionResult = {
     prior: PriorInvestigationResult;
     freshResult: InvestigationResult | null;
     persistence: PersistenceResult | null;
+
+    /** Differences from the prior investigation, when one could be compared. */
+    comparison: InvestigationComparison | null;
+    comparisonError: string | null;
 };
 
 type ServiceDependencies = {
     getPrior: typeof getPriorInvestigation;
     investigate: typeof investigateCve;
     persist: typeof persistInvestigationResult;
+    compare?: typeof compareWithBaseline;
 };
 
 const defaultDependencies: ServiceDependencies = {
@@ -85,6 +94,8 @@ export async function investigateWithPriorPolicy(
             prior,
             freshResult: null,
             persistence: null,
+            comparison: null,
+            comparisonError: null,
         };
     }
 
@@ -103,10 +114,30 @@ export async function investigateWithPriorPolicy(
     const persistence =
         await dependencies.persist(freshResult);
 
+    let comparison: InvestigationComparison | null = null;
+    let comparisonError: string | null = null;
+
+    // Comparing is an extra; it must never cost the analyst the investigation.
+    if (prior.context) {
+        try {
+            comparison = await (dependencies.compare ?? compareWithBaseline)(
+                prior.context,
+                freshResult,
+            );
+        } catch (error) {
+            console.error("ThreatIntel comparison failed:", error);
+
+            comparisonError =
+                "The prior investigation could not be compared with this result.";
+        }
+    }
+
     return {
         mode: "refreshed",
         prior,
         freshResult,
         persistence,
+        comparison,
+        comparisonError,
     };
 }

@@ -226,8 +226,8 @@ assert(
 );
 
 assert(
-  result.providerResults.length === 3,
-  `Expected 3 provider results (NVD, CISA_KEV, REDHAT), got ${result.providerResults.length}`,
+  result.providerResults.length === 4,
+  `Expected 4 provider results (NVD, CISA_KEV, REDHAT, OSV), got ${result.providerResults.length}`,
 );
 
 console.log(

@@ -1,7 +1,8 @@
 export type SourceId =
   | "NVD"
   | "CISA_KEV"
-  | "REDHAT";
+  | "REDHAT"
+  | "OSV";
 
 export type SourceType =
   | "primary"
@@ -172,15 +173,89 @@ export type VendorImpactAssessment = {
 };
 
 /**
- * Sources that disagree about the same value. Reported, never resolved.
+ * Investigations saved by v0.3 recorded CVSS disagreements in this shape.
  */
-export type EvidenceConflict = {
+export type LegacyEvidenceConflict = {
   field: "cvss.baseScore";
 
   values: {
     source: string;
     value: number;
   }[];
+};
+
+export type CorrelationValue = {
+  source: string;
+  value: string | number;
+  vector?: string | null;
+  evidenceId: string | null;
+};
+
+/**
+ * What independent sources say about one thing. Sources are never reduced to a
+ * single value: every source's answer stays attached.
+ */
+export type Correlation = {
+  id: string;
+
+  topic:
+  | "cvss"
+  | "severity"
+  | "exploitation"
+  | "vendor_assessment"
+  | "fixed_version";
+
+  scope: string | null;
+
+  /**
+   * conflict: sources disagree about the same thing.
+   * explained_difference: sources are answering different questions.
+   * incomplete: a comparison could not be completed.
+   */
+  classification:
+  | "agreement"
+  | "conflict"
+  | "explained_difference"
+  | "incomplete";
+
+  reason: string;
+
+  explanation: string;
+
+  values: CorrelationValue[];
+
+  /** Set when an output cap removed values from this comparison. */
+  valuesOmitted?: number;
+
+  /**
+   * A reading this engine applies, not something any source states. Red Hat's
+   * scale and CVSS severity are separate, so an alignment here is never agreement.
+   */
+  interpretation?: {
+    kind: "approximate_name_alignment";
+    aligned: boolean;
+  };
+};
+
+export type PackageFix = {
+  ecosystem: string;
+  package: string;
+  fixedVersions: string[];
+  lastAffectedVersions: string[];
+  advisoryId: string;
+};
+
+/**
+ * One assessment statement, with what it rests on. Every statement except a gap
+ * must cite a fact, a provider check, or evidence.
+ */
+export type AssessmentStatement = {
+  topic: string;
+  kind: "fact" | "inference" | "conflict" | "difference" | "gap";
+  statement: string;
+  factIds: string[];
+  providerChecks: SourceId[];
+  evidenceIds: string[];
 };
 
 export type InvestigationSummary = {
@@ -196,7 +271,20 @@ export type InvestigationSummary = {
 
   vendorImpact: VendorImpactAssessment[];
 
-  conflicts?: EvidenceConflict[];
+  correlations?: Correlation[];
+
+  packageFixes?: PackageFix[];
+
+  assessment?: AssessmentStatement[];
+
+  /**
+   * Missing OSV enrichment. Kept apart from the investigation's limitations
+   * because it should not, alone, block reuse of complete core evidence.
+   */
+  enrichmentLimitations?: string[];
+
+  /** Read only from investigations saved by v0.3. */
+  conflicts?: LegacyEvidenceConflict[];
 };
 
 export type InvestigationResult = {

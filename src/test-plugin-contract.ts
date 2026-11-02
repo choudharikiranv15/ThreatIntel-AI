@@ -73,6 +73,26 @@ const redHatRecord = {
     })),
 };
 
+const osvAdvisory = {
+    id: "GHSA-test",
+    aliases: [CVE],
+    modified: "2026-01-01T00:00:00Z",
+    database_specific: { github_reviewed: true, severity: "CRITICAL" },
+    affected: Array.from({ length: 80 }, (_, index) => ({
+        package: {
+            ecosystem: "Maven",
+            name: `org.example.long.group.name:artifact-${index}`,
+        },
+        versions: Array.from({ length: 50 }, (_, version) => `9.9.${version}`),
+        ranges: [
+            {
+                type: "ECOSYSTEM",
+                events: [{ introduced: "0" }, { fixed: `${index}.0.1` }],
+            },
+        ],
+    })),
+};
+
 let kevFails = false;
 
 globalThis.fetch = (async (input: string | URL | Request) => {
@@ -82,6 +102,14 @@ globalThis.fetch = (async (input: string | URL | Request) => {
         return Response.json({
             vulnerabilities: [{ cve: nvdRecord }],
         });
+    }
+
+    if (url.includes("api.osv.dev")) {
+        return Response.json(
+            url.endsWith("GHSA-test")
+                ? osvAdvisory
+                : { id: CVE, aliases: ["GHSA-test"], modified: "2026-01-01T00:00:00Z" },
+        );
     }
 
     if (url.includes("cisa.gov")) {
@@ -244,11 +272,42 @@ async function callTool(
 
 /* ----------------------------------- Contract ---------------------------------- */
 
+type Comparison = {
+    noIntelligenceChange: boolean | null;
+    omittedChanges: number;
+    baseline: {
+        basis: string;
+        integrity: {
+            evidenceRows: string;
+            recordConsistency: string;
+            fullyVerified: boolean;
+        };
+    };
+    counts: Record<string, number>;
+    changes: { category: string; field: string; before: unknown; after: unknown }[];
+};
+
 type View = {
     mode?: string;
     target?: string;
+    changesSincePrior?: Comparison | null;
+    assessment: {
+        items: {
+            kind: string;
+            statement: string;
+            factIds?: string[];
+            providerChecks?: string[];
+            evidenceIds?: string[];
+        }[];
+        total: number;
+    };
     status: string;
-    summary: { kevStatus: string; cvss: { baseScore: number | null } };
+    summary: {
+        kevStatus: string;
+        cvss: { baseScore: number | null };
+        correlations: { total: number; items: unknown[] };
+        packageFixes: { total: number; omitted: number; items: { package: string }[] };
+    };
     providerResults: { provider: string; status: string }[];
     limitations: string[];
     analystGuidance: string[];
@@ -274,7 +333,7 @@ function assertContract(text: string): View {
 
     const providers = view.providerResults.map((row) => row.provider);
 
-    for (const provider of ["NVD", "CISA_KEV", "REDHAT"]) {
+    for (const provider of ["NVD", "CISA_KEV", "REDHAT", "OSV"]) {
         assert(
             providers.includes(provider),
             `${provider} provider result must be visible`,
@@ -282,6 +341,7 @@ function assertContract(text: string): View {
     }
 
     for (const key of [
+        "assessment",
         "status",
         "summary",
         "limitations",
@@ -291,6 +351,24 @@ function assertContract(text: string): View {
         "evidence",
     ]) {
         assert(key in view, `${key} must be present`);
+    }
+
+    const factIds = new Set(
+        view.facts.map((fact) => (fact as { id?: string }).id),
+    );
+
+    for (const item of view.assessment.items) {
+        assert(
+            item.kind === "gap" ||
+            (item.factIds?.length ?? 0) +
+            (item.providerChecks?.length ?? 0) +
+            (item.evidenceIds?.length ?? 0) > 0,
+            `assessment statement cites nothing: ${item.statement}`,
+        );
+
+        for (const id of item.factIds ?? []) {
+            assert(factIds.has(id), `assessment cites unknown fact ${id}`);
+        }
     }
 
     return view;
@@ -312,7 +390,7 @@ async function main(): Promise<void> {
         freshView.inferences.some((inference) =>
             inference.claim.includes("catalog version 2099.01.01"),
         ) &&
-        fresh.text.includes('"catalogVersion": "2099.01.01"'),
+        fresh.text.includes('"catalogVersion":"2099.01.01"'),
         "a KEV absence must name the catalog it was checked against",
     );
 
@@ -342,6 +420,35 @@ async function main(): Promise<void> {
     );
 
     console.log("✓ Reused result matches the fresh schema and conclusions");
+
+    /* Correlation and OSV data reach the LLM in both modes. */
+    for (const view of [freshView, reusedView]) {
+        assert(
+            view.summary.packageFixes.total === 80 &&
+            view.summary.packageFixes.items[0].package.includes("artifact-0") &&
+            view.summary.packageFixes.total ===
+            view.summary.packageFixes.items.length + view.summary.packageFixes.omitted,
+            "OSV package fixes must arrive with exact counts",
+        );
+        assert(
+            view.summary.correlations.total > 0 &&
+            view.assessment.total > 0,
+            "correlations and assessment must reach the LLM",
+        );
+    }
+
+    assert(
+        freshView.changesSincePrior === null &&
+        reusedView.changesSincePrior === null,
+        "no comparison exists without a newer result",
+    );
+
+    assert(
+        !fresh.text.includes("9.9.49") && !reused.text.includes("9.9.49"),
+        "OSV version lists must not enter the tool result",
+    );
+
+    console.log("✓ Correlation, assessment, and OSV fixes reach the LLM in both modes");
 
     /* Externally authored text is labelled in both modes; our own facts are not. */
     for (const view of [freshView, reusedView]) {
@@ -411,6 +518,21 @@ async function main(): Promise<void> {
 
     kevFails = false;
 
+    /* The next run compares itself with the last: an outage is not a change. */
+    const degradedChanges = degraded.changesSincePrior;
+
+    assert(
+        degradedChanges?.noIntelligenceChange === true &&
+        degradedChanges.changes.some(
+            (change) =>
+                change.field === "kevStatus" &&
+                change.category === "collection_difference",
+        ),
+        `a KEV outage must be a collection difference: ${JSON.stringify(degradedChanges)}`,
+    );
+
+    console.log("✓ A provider outage is not reported as an intelligence change");
+
     assert(
         degraded.summary.kevStatus === "unknown" &&
         degraded.providerResults.some(
@@ -426,6 +548,124 @@ async function main(): Promise<void> {
     );
 
     console.log("✓ KEV failure is visible as unknown");
+
+    /* A real change at the source is reported through the plugin. */
+    const metrics = nvdRecord.metrics.cvssMetricV31[0].cvssData;
+    const originalScore = metrics.baseScore;
+
+    metrics.baseScore = 9.1;
+
+    const rescored = assertContract(
+        (
+            await callTool("threatintel_investigate", {
+                target: CVE,
+                forceRefresh: true,
+            })
+        ).text,
+    );
+
+    assert(
+        rescored.changesSincePrior?.changes.some(
+            (change) =>
+                change.field === "cvss.baseScore" &&
+                change.category === "intelligence_change" &&
+                change.before === originalScore &&
+                change.after === 9.1,
+        ),
+        `a rescore must be an intelligence change: ${JSON.stringify(rescored.changesSincePrior)}`,
+    );
+
+    metrics.baseScore = originalScore;
+
+    const compared = await callTool("threatintel_compare_investigations", {
+        target: CVE.toLowerCase(),
+    });
+
+    assert(
+        compared.text.length <= MAX_TOOL_RESULT_CHARS,
+        "the comparison tool must stay within the limit",
+    );
+
+    const comparedPayload = JSON.parse(compared.text) as Comparison & {
+        comparable: boolean;
+    };
+
+    assert(
+        comparedPayload.comparable === true &&
+        comparedPayload.counts.intelligence_change > 0 &&
+        comparedPayload.baseline.basis === "rederived_from_stored_evidence" &&
+        comparedPayload.baseline.integrity.fullyVerified === true,
+        `the comparison tool should report the rescore: ${compared.text.slice(0, 400)}`,
+    );
+
+    const noHistory = JSON.parse(
+        (
+            await callTool("threatintel_compare_investigations", {
+                target: "CVE-2099-9999",
+            })
+        ).text,
+    ) as { comparable: boolean };
+
+    assert(noHistory.comparable === false, "no history must be reported as not comparable");
+
+    console.log("✓ Real changes are reported through both plugin tools");
+
+    /*
+     * The complete response at its largest, through the real tool: every source
+     * at maximum, plus a comparison with more changes than can fit.
+     */
+    const originalMetrics = nvdRecord.metrics.cvssMetricV31;
+    const originalWeaknesses = nvdRecord.weaknesses;
+    const originalStates = redHatRecord.package_state;
+
+    nvdRecord.metrics.cvssMetricV31 = Array.from({ length: 400 }, (_, index) => ({
+        source: `cna-${index}@vendor.example`,
+        cvssData: {
+            version: "3.1",
+            baseScore: 1 + (index % 9),
+            baseSeverity: "HIGH",
+            vectorString: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
+        },
+    }));
+
+    nvdRecord.weaknesses = [
+        {
+            description: Array.from({ length: 3000 }, (_, index) => ({
+                lang: "en",
+                value: `CWE-${index}`,
+            })),
+        },
+    ];
+
+    redHatRecord.package_state = Array.from({ length: 2000 }, (_, index) => ({
+        product_name: `Renamed Red Hat Product With A Very Long Name ${"x".repeat(200)} ${index}`,
+        package_name: `renamed-package-${"y".repeat(200)}-${index}`,
+        fix_state: "Will not fix",
+    }));
+
+    const largest = await callTool("threatintel_investigate", {
+        target: CVE,
+        forceRefresh: true,
+    });
+
+    nvdRecord.metrics.cvssMetricV31 = originalMetrics;
+    nvdRecord.weaknesses = originalWeaknesses;
+    redHatRecord.package_state = originalStates;
+
+    const largestView = assertContract(largest.text);
+
+    assert(
+        (largestView.changesSincePrior?.changes.length ?? 0) > 0 &&
+        (largestView.changesSincePrior?.omittedChanges ?? 0) > 0,
+        "the largest response must include a comparison that overflowed its budget",
+    );
+
+    assert(
+        !largest.text.includes("_reducedToFit"),
+        "the normal caps, not the emergency reduction, must fit the largest response",
+    );
+
+    console.log(`✓ The largest complete response is ${largest.text.length} chars`);
 
     /* A database outage still returns evidence, and leaks nothing. */
     const realQuery = fakeDb.query;
@@ -453,6 +693,14 @@ async function main(): Promise<void> {
         priorToolError = String(error);
     }
 
+    let compareToolError = "";
+
+    try {
+        await callTool("threatintel_compare_investigations", { target: CVE });
+    } catch (error) {
+        compareToolError = String(error);
+    }
+
     fakeDb.query = realQuery;
     fakeDb.connect = realConnect;
     console.error = realConsoleError;
@@ -472,7 +720,9 @@ async function main(): Promise<void> {
     assert(
         !offline.text.includes("projectref") &&
         priorToolError !== "" &&
-        !priorToolError.includes("projectref"),
+        !priorToolError.includes("projectref") &&
+        compareToolError !== "" &&
+        !compareToolError.includes("projectref"),
         "database details must not reach the LLM",
     );
 
@@ -535,6 +785,7 @@ async function main(): Promise<void> {
         ...freshView.facts.map((fact) => fact.claim),
         ...freshView.inferences.map((inference) => inference.claim),
         ...freshView.analystGuidance,
+        ...freshView.assessment.items.map((item) => item.statement),
     ].join("\n");
 
     const faithfulDecision = gate(faithful);

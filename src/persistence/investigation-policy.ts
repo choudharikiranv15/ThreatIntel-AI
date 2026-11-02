@@ -12,6 +12,12 @@ export const DEFAULT_PRIOR_MAX_AGE_HOURS = 24;
  */
 export const KEV_ABSENCE_MAX_AGE_HOURS = 6;
 
+/*
+ * OSV only enriches an investigation, so its failure alone does not discard
+ * complete core evidence. It is retried after this long, with the gap shown.
+ */
+export const ENRICHMENT_RETRY_HOURS = 1;
+
 export type PriorDecision =
     | {
         decision: "reuse";
@@ -86,6 +92,29 @@ function providerCompleted(
             result.status === "success" ||
             result.status === "observed_absence",
     );
+}
+
+function osvEnrichmentIncomplete(providerResults: unknown[]): boolean {
+    return providerResults.some((value) => {
+        if (
+            !isProviderResult(value) ||
+            value.provider !== "OSV"
+        ) {
+            return false;
+        }
+
+        if (value.status === "error" || value.status === "timeout") {
+            return true;
+        }
+
+        const { evidence } = value as unknown as {
+            evidence?: { facts?: { advisoriesFailed?: unknown } };
+        };
+
+        const failed = evidence?.facts?.advisoriesFailed;
+
+        return Array.isArray(failed) && failed.length > 0;
+    });
 }
 
 function calculateAgeHours(
@@ -289,10 +318,20 @@ export function evaluatePriorInvestigation(
         }
     }
 
+    const enrichmentIncomplete = osvEnrichmentIncomplete(input.providerResults);
+
+    if (enrichmentIncomplete && ageHours > ENRICHMENT_RETRY_HOURS) {
+        return refreshDecision(
+            `OSV enrichment was incomplete, and it is retried after ${ENRICHMENT_RETRY_HOURS} hour.`,
+            ageHours,
+        );
+    }
+
     return {
         decision: "reuse",
-        reason:
-            `Prior investigation is confirmed, complete, evidence-backed, and ${ageHours.toFixed(1)} hours old; all evidence is within the freshness window.`,
+        reason: enrichmentIncomplete
+            ? `NVD and CISA KEV checks are complete, and the investigation is ${ageHours.toFixed(1)} hours old. OSV enrichment is missing and will be retried after ${ENRICHMENT_RETRY_HOURS} hour.`
+            : `Prior investigation is confirmed, complete, evidence-backed, and ${ageHours.toFixed(1)} hours old; all evidence is within the freshness window.`,
         ageHours,
     };
 }

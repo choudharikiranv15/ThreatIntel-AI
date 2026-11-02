@@ -29,11 +29,12 @@ function readPayload(result: unknown): unknown {
         content?: { text?: unknown }[];
     };
 
-    if (toolResult.details) {
+    // Results are returned as JSON text, so details can hold that same string.
+    if (toolResult.details && typeof toolResult.details !== "string") {
         return toolResult.details;
     }
 
-    const text = toolResult.content?.[0]?.text;
+    const text = toolResult.details ?? toolResult.content?.[0]?.text;
 
     if (typeof text !== "string") {
         return null;
@@ -56,7 +57,7 @@ function extractView(payload: unknown): InvestigationView | null {
         | null;
 
     return typeof candidate?.target === "string" &&
-        Array.isArray(candidate.summary?.conflicts) &&
+        candidate.summary?.correlations &&
         Array.isArray(candidate.facts)
         ? (candidate as InvestigationView)
         : null;

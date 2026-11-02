@@ -36,6 +36,30 @@ const KEV_POSITIVE_PATTERN =
 const REJECTED_CLAIM_PATTERN =
     /\b(?:incorrect|inaccurate|wrong|false|claimed|claims?|contradict\w*|rather\s+than|instead\s+of|not\s+correct|not\s+accurate)\b/i;
 
+const NO_CONFLICT_PATTERN =
+    /\bno\s+(?:conflicts?|disagreements?)\b/i;
+
+const SOURCES_AGREE_PATTERN =
+    /\bsources?\s+(?:all\s+|fully\s+)?agree\b|\bfully\s+agree\b/i;
+
+/* Limits an agreement claim to what it is about, when it says. */
+const AGREEMENT_TOPICS: [string, RegExp][] = [
+    ["cvss", /\b(?:cvss|score)\b/i],
+    ["severity", /\b(?:severity|rating)\b/i],
+    ["exploitation", /\b(?:kev|exploit\w*)\b/i],
+    ["vendor_assessment", /\b(?:vendor|products?)\b/i],
+    ["fixed_version", /\b(?:fix\w*|patch\w*)\b/i],
+];
+
+const ALL_VENDOR_PRODUCTS_PATTERN =
+    /(?<!\bnot\s)\b(?:all|every)\b[^.]*\bred\s*hat\b[^.]*\b(?:products?|packages?)\b[^.]*?\b(not\s+affected|unaffected|not\s+vulnerable|affected|vulnerable|fixed)\b/i;
+
+const VENDOR_PRODUCTS_ALL_PATTERN =
+    /\bred\s*hat\b[^.]*\b(?:products?|packages?)\b[^.]*?\b(?:are|is)\s+all\s+(not\s+affected|unaffected|not\s+vulnerable|affected|vulnerable|fixed)\b/i;
+
+const NO_VENDOR_PRODUCTS_PATTERN =
+    /\bno\s+(?:[\w-]+\s+){0,2}red\s*hat\b[^.]*\b(?:products?|packages?)\b[^.]*\b(?:affected|vulnerable)\b/i;
+
 const FRESH_RETRIEVAL_PATTERN =
     /\b(?:just|freshly|newly)\s+(?:retrieved|fetched|pulled|obtained|checked|queried)\b|\bretrieved\s+just\s+now\b/i;
 
@@ -75,6 +99,93 @@ function kevClaim(segment: string): boolean | null {
     return KEV_POSITIVE_PATTERN.test(segment) ? true : null;
 }
 
+/* A sweeping claim about Red Hat products, checked against every row's status. */
+function checkVendorClaim(
+    segment: string,
+    view: InvestigationView,
+    findings: Set<string>,
+): void {
+    const counts = view.summary.vendorImpact.statusCounts;
+    const count = (status: string) => counts[status] ?? 0;
+    const { total } = view.summary.vendorImpact;
+
+    const all =
+        segment.match(ALL_VENDOR_PRODUCTS_PATTERN)?.[1] ??
+        segment.match(VENDOR_PRODUCTS_ALL_PATTERN)?.[1];
+
+    const none = NO_VENDOR_PRODUCTS_PATTERN.test(segment);
+
+    if (!all && !none) {
+        return;
+    }
+
+    const breakdown = JSON.stringify(counts);
+
+    if (total === 0) {
+        findings.add(
+            `${view.target}: the answer makes a claim about all Red Hat products, but no Red Hat assessment was retrieved.`,
+        );
+
+        return;
+    }
+
+    const claimed = all?.toLowerCase().replace(/\s+/g, " ");
+
+    const exceptions = none
+        ? count("affected") + count("fixed") + count("unknown")
+        : claimed === "fixed"
+            ? total - count("fixed")
+            : claimed === "affected" || claimed === "vulnerable"
+                ? count("not_affected") + count("unknown")
+                : total - count("not_affected");
+
+    if (exceptions > 0) {
+        findings.add(
+            `${view.target}: the answer makes a claim about all Red Hat products, but ${exceptions} of ${total} rows do not support it (${breakdown}).`,
+        );
+    }
+}
+
+function checkAgreementClaim(
+    segment: string,
+    view: InvestigationView,
+    findings: Set<string>,
+): void {
+    const { items, omitted } = view.summary.correlations;
+
+    if (
+        NO_CONFLICT_PATTERN.test(segment) &&
+        items.some((item) => item.classification === "conflict")
+    ) {
+        findings.add(
+            `${view.target}: the answer says there is no conflict, but the evidence records an unresolved conflict.`,
+        );
+    }
+
+    if (!SOURCES_AGREE_PATTERN.test(segment)) {
+        return;
+    }
+
+    const topics = AGREEMENT_TOPICS
+        .filter(([, pattern]) => pattern.test(segment))
+        .map(([topic]) => topic);
+
+    const relevant = topics.length > 0
+        ? items.filter((item) => topics.includes(item.topic))
+        : items;
+
+    const supported =
+        omitted === 0 &&
+        relevant.length > 0 &&
+        relevant.every((item) => item.classification === "agreement");
+
+    if (!supported) {
+        findings.add(
+            `${view.target}: the answer says the sources agree, but the comparisons do not establish that. Report their classifications instead.`,
+        );
+    }
+}
+
 function checkSegment(
     segment: string,
     view: InvestigationView,
@@ -98,8 +209,10 @@ function checkSegment(
         });
 
         // Reporting another source's score from a known conflict is accurate.
-        const reportedConflict = summary.conflicts.some((conflict) =>
-            conflict.values.some((item) => item.value === baseScore),
+        const reportedConflict = summary.correlations.items.some(
+            (correlation) =>
+                correlation.topic === "cvss" &&
+                correlation.values.some((item) => item.value === baseScore),
         );
 
         if (state !== "confirmed" && !reportedConflict) {
@@ -127,6 +240,9 @@ function checkSegment(
             );
         }
     }
+
+    checkAgreementClaim(segment, view, findings);
+    checkVendorClaim(segment, view, findings);
 
     const listed = kevClaim(segment);
 

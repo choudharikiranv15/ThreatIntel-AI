@@ -101,8 +101,8 @@ assert(
 );
 
 assert(
-  result.providerResults.length === 3,
-  `Expected 3 provider results, got ${result.providerResults.length}`,
+  result.providerResults.length === 4,
+  `Expected 4 provider results, got ${result.providerResults.length}`,
 );
 
 /* -------------------------------------------------------------------------- */

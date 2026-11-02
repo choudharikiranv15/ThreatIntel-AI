@@ -2,6 +2,7 @@ import type {
   Evidence,
   ProviderResult,
 } from "../types.js";
+import { ENGINE_VERSION } from "../version.js";
 
 import { requestSignal } from "./request-signal.js";
 
@@ -58,7 +59,7 @@ export async function fetchCisaKev(
         headers: {
           Accept: "application/json",
           "User-Agent":
-            "ThreatIntel-AI-Engine/0.3.0",
+            `ThreatIntel-AI-Engine/${ENGINE_VERSION}`,
         },
 
         signal:

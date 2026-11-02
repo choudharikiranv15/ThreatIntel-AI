@@ -351,7 +351,11 @@ async function testRedHatData(): Promise<void> {
         "fixed releases must appear alongside package states",
     );
 
-    const values = result.summary.conflicts?.[0]?.values ?? [];
+    const cvssCorrelation = result.summary.correlations?.find(
+        (item) => item.topic === "cvss",
+    );
+
+    const values = cvssCorrelation?.values ?? [];
 
     assert(
         values.some((item) => item.source === "nvd@nist.gov" && item.value === 10) &&
@@ -386,7 +390,9 @@ async function testRedHatData(): Promise<void> {
     });
 
     assert(
-        agreeing.summary.conflicts?.length === 0,
+        !agreeing.summary.correlations?.some(
+            (item) => item.classification === "conflict",
+        ),
         "matching scores are not a conflict",
     );
 
