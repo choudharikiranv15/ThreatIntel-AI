@@ -86,7 +86,12 @@ function checkSegment(
             factProvenance,
         });
 
-        if (state !== "confirmed") {
+        // Reporting another source's score from a known conflict is accurate.
+        const reportedConflict = summary.conflicts.some((conflict) =>
+            conflict.values.some((item) => item.value === baseScore),
+        );
+
+        if (state !== "confirmed" && !reportedConflict) {
             findings.add(
                 `${target}: the answer states CVSS base score ${baseScore}, but the evidence shows ${summary.cvss.baseScore ?? "no score"}.`,
             );

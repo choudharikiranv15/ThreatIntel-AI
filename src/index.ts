@@ -81,7 +81,8 @@ const entry = defineToolPlugin({
         "Use returned structured fields as the source of truth.",
         "Lists under summary and evidence report total and omitted counts; state when a list is incomplete instead of implying it is exhaustive.",
         "Clearly separate confirmed facts, analysis and inferences, and SOC guidance.",
-        "Surface conflicting evidence instead of silently resolving conflicts.",
+        "Report every entry in summary.conflicts, naming each source's value; never silently pick one.",
+        "A vendor impact status of fixed means the vendor shipped a fix for that product, so the product was affected before the fix.",
         "A reused investigation is historical persisted intelligence, not a guarantee that the target's current state has not changed.",
 
         "Distinguish evidence retrieved directly by a provider from URLs merely listed in that provider's record.",

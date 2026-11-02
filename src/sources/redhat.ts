@@ -7,18 +7,9 @@ export interface RedHatOptions {
   timeoutMs: number;
 }
 
-interface RedHatPackageState {
-  product_name?: string;
-  package_name?: string;
-  fix_state?: string;
-  cpe?: string;
-}
-
-interface RedHatCveResponse {
+interface RedHatCveResponse extends Record<string, unknown> {
   name?: string;
-  threat_severity?: string;
-  statement?: string;
-  package_state?: RedHatPackageState[];
+  package_state?: unknown[];
 }
 
 function isTimeoutError(
@@ -132,9 +123,7 @@ export async function fetchRedHatCve(
       confidence: "high",
 
       facts: {
-        name: data.name,
-        threat_severity: data.threat_severity,
-        statement: data.statement,
+        ...data,
         package_state: data.package_state ?? [],
         _http_status: response.status,
       },

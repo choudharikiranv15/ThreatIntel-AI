@@ -5,6 +5,8 @@
 import { investigateCve } from "./engine.js";
 import { evaluatePriorInvestigation } from "./persistence/investigation-policy.js";
 import { fetchRedHatCve } from "./sources/redhat.js";
+import { viewFromResult } from "./tool-result.js";
+import { checkAnswer } from "./verification/check-answer.js";
 import { verifyCvssClaim, verifyKevClaim } from "./verification/index.js";
 import type { ProviderResult, SourceId } from "./types.js";
 
@@ -296,6 +298,100 @@ async function testFactTags(): Promise<void> {
     console.log("✓ Verification cites tagged facts, not matching text");
 }
 
+async function testRedHatData(): Promise<void> {
+    const realFetch = globalThis.fetch;
+
+    globalThis.fetch = (async () =>
+        Response.json({
+            name: "CVE-2099-0001",
+            cvss3: { cvss3_base_score: "9.8" },
+            affected_release: [
+                {
+                    product_name: "Red Hat Enterprise Linux 8",
+                    advisory: "RHSA-2099:0001",
+                    package: "log4j-0:2.17.0-1.el8",
+                },
+            ],
+            package_state: [
+                {
+                    product_name: "Red Hat Enterprise Linux 7",
+                    package_name: "log4j",
+                    fix_state: "Not affected",
+                },
+            ],
+        })) as typeof fetch;
+
+    const redhat = await fetchRedHatCve("CVE-2099-0001", { timeoutMs: 1000 });
+
+    globalThis.fetch = realFetch;
+
+    const result = await run({
+        redhat: async () => redhat,
+        nvd: found("NVD", {
+            id: "CVE-2099-0001",
+            metrics: {
+                cvssMetricV31: [
+                    {
+                        source: "nvd@nist.gov",
+                        cvssData: { version: "3.1", baseScore: 10 },
+                    },
+                ],
+            },
+        }),
+    });
+
+    const fixed = result.summary.vendorImpact.find(
+        (row) => row.status === "fixed",
+    );
+
+    assert(
+        fixed?.originalStatus === "Fixed by RHSA-2099:0001" &&
+        result.summary.vendorImpact.length === 2,
+        "fixed releases must appear alongside package states",
+    );
+
+    const values = result.summary.conflicts?.[0]?.values ?? [];
+
+    assert(
+        values.some((item) => item.source === "nvd@nist.gov" && item.value === 10) &&
+        values.some((item) => item.source === "Red Hat" && item.value === 9.8),
+        "NVD and Red Hat CVSS disagreement must be reported",
+    );
+
+    const view = viewFromResult(result);
+
+    assert(
+        checkAnswer("CVE-2099-0001: Red Hat gives CVSS 9.8.", [view]).length === 0,
+        "the gate must accept a score from a reported conflict",
+    );
+    assert(
+        checkAnswer("CVE-2099-0001 has CVSS 5.0.", [view]).length === 1,
+        "the gate must still reject an unsupported score",
+    );
+
+    const agreeing = await run({
+        nvd: found("NVD", {
+            id: "CVE-2099-0001",
+            metrics: {
+                cvssMetricV31: [
+                    {
+                        source: "nvd@nist.gov",
+                        cvssData: { version: "3.1", baseScore: 9.8 },
+                    },
+                ],
+            },
+        }),
+        redhat: async () => redhat,
+    });
+
+    assert(
+        agreeing.summary.conflicts?.length === 0,
+        "matching scores are not a conflict",
+    );
+
+    console.log("✓ Red Hat fixes are kept and CVSS conflicts are reported");
+}
+
 async function main(): Promise<void> {
     await testStatus();
     await testRejected();
@@ -303,6 +399,7 @@ async function main(): Promise<void> {
     await testCvssSource();
     await testAffectedVersions();
     await testFactTags();
+    await testRedHatData();
 
     console.log("Engine accuracy tests PASSED");
 }

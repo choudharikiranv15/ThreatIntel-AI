@@ -43,7 +43,7 @@ function extractView(result: unknown): InvestigationView | null {
         | null;
 
     return typeof candidate?.target === "string" &&
-        candidate.summary &&
+        Array.isArray(candidate.summary?.conflicts) &&
         Array.isArray(candidate.facts)
         ? (candidate as InvestigationView)
         : null;

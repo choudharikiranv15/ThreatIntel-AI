@@ -2,6 +2,7 @@ import type { InvestigationContext } from "./persistence/investigation-context.j
 import { classifyEvidenceReferences } from "./reference-provenance.js";
 import type {
     CvssDetails,
+    EvidenceConflict,
     EvidenceReference,
     InvestigationResult,
     KevStatus,
@@ -50,6 +51,7 @@ export type InvestigationView = {
         severity: string | null;
         cvss: CvssDetails;
         kevStatus: KevStatus;
+        conflicts: EvidenceConflict[];
         cwe: string[];
         affectedVersions: Capped<string>;
         vendorImpact: Capped<{
@@ -120,7 +122,8 @@ function clip(text: string, limit: number): string {
 const IMPACT_ORDER: Record<string, number> = {
     affected: 0,
     unknown: 1,
-    not_affected: 2,
+    fixed: 2,
+    not_affected: 3,
 };
 
 function vendorImpactRows(
@@ -175,6 +178,7 @@ function render(source: ViewSource, tier: Tier): InvestigationView {
                 severity: null,
             },
             kevStatus: summary.kevStatus ?? "unknown",
+            conflicts: summary.conflicts ?? [],
             cwe: summary.cwe ?? [],
             affectedVersions: capped(
                 summary.affectedVersions ?? [],

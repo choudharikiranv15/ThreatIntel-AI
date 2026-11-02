@@ -139,6 +139,7 @@ export type ProviderResult = {
 
 export type VendorImpactStatus =
   | "affected"
+  | "fixed"
   | "not_affected"
   | "unknown";
 
@@ -164,6 +165,18 @@ export type VendorImpactAssessment = {
   reason: string;
 };
 
+/**
+ * Sources that disagree about the same value. Reported, never resolved.
+ */
+export type EvidenceConflict = {
+  field: "cvss.baseScore";
+
+  values: {
+    source: string;
+    value: number;
+  }[];
+};
+
 export type InvestigationSummary = {
   severity: string | null;
 
@@ -176,6 +189,8 @@ export type InvestigationSummary = {
   affectedVersions: string[];
 
   vendorImpact: VendorImpactAssessment[];
+
+  conflicts?: EvidenceConflict[];
 };
 
 export type InvestigationResult = {

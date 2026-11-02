@@ -22,12 +22,14 @@ import {
 import type {
   ClaimVerification,
   Evidence,
+  EvidenceConflict,
   EvidenceFactRecord,
   InferenceRecord,
   InvestigationResult,
   KevStatus,
   CvssDetails,
   ProviderResult,
+  VendorImpactAssessment,
 } from "./types.js";
 
 import type {
@@ -716,18 +718,37 @@ function extractCisaFacts(
 /* Red Hat facts                                                              */
 /* -------------------------------------------------------------------------- */
 
+function redHatCvssScore(
+  evidence: Evidence,
+): number | null {
+  const cvss3 =
+    getNestedObject(
+      evidence.facts,
+      "cvss3",
+    );
+
+  const score = Number(
+    cvss3?.cvss3_base_score ?? Number.NaN,
+  );
+
+  return Number.isFinite(score)
+    ? score
+    : null;
+}
+
 function extractRedHatFacts(
   cveId: string,
   evidence: Evidence,
-): string[] {
-  const facts: string[] = [];
+): TaggedFact[] {
+  const facts: TaggedFact[] = [];
 
   const source =
     evidence.facts;
 
-  facts.push(
-    `${cveId} has a Red Hat Security Data API record.`,
-  );
+  facts.push({
+    claim: `${cveId} has a Red Hat Security Data API record.`,
+    field: "redhatRecord",
+  });
 
   const threatSeverity =
     getString(
@@ -736,9 +757,20 @@ function extractRedHatFacts(
     );
 
   if (threatSeverity) {
-    facts.push(
-      `Red Hat threat severity: ${threatSeverity}.`,
-    );
+    facts.push({
+      claim: `Red Hat threat severity: ${threatSeverity}.`,
+      field: "redhatSeverity",
+    });
+  }
+
+  const cvssScore =
+    redHatCvssScore(evidence);
+
+  if (cvssScore !== null) {
+    facts.push({
+      claim: `Red Hat CVSS v3 base score: ${cvssScore}.`,
+      field: "redhatCvss",
+    });
   }
 
   const statement =
@@ -748,9 +780,10 @@ function extractRedHatFacts(
     );
 
   if (statement) {
-    facts.push(
-      `Red Hat statement: ${statement}`,
-    );
+    facts.push({
+      claim: `Red Hat statement: ${statement}`,
+      field: "statement",
+    });
   }
 
   return facts;
@@ -822,37 +855,79 @@ function normalizeRedHatFixState(
 function extractRedHatVendorImpact(
   cveId: string,
   evidence: Evidence,
-): Array<{
-  vendor: string;
-  productName: string;
-  packageName: string;
-  cpe: string | null;
-  status: "affected" | "not_affected" | "unknown";
-  originalStatus: string;
-  sourceUrl: string;
-  retrievedAt: string;
-  evidenceId: string;
-  reason: string;
-}> {
-  const packageState =
-    evidence.facts.package_state;
+): VendorImpactAssessment[] {
+  const assessments: VendorImpactAssessment[] = [];
 
-  if (!Array.isArray(packageState)) {
-    return [];
+  /*
+   * affected_release lists products where Red Hat shipped a fix.
+   * package_state does not repeat them.
+   */
+  const releases =
+    getArray(
+      evidence.facts,
+      "affected_release",
+    ) ?? [];
+
+  for (const release of releases) {
+    if (
+      typeof release !== "object" ||
+      release === null ||
+      Array.isArray(release)
+    ) {
+      continue;
+    }
+
+    const releaseObject =
+      release as Record<string, unknown>;
+
+    const productName =
+      getString(
+        releaseObject,
+        "product_name",
+      );
+
+    if (!productName) {
+      continue;
+    }
+
+    const advisory =
+      getString(
+        releaseObject,
+        "advisory",
+      );
+
+    const originalStatus = advisory
+      ? `Fixed by ${advisory}`
+      : "Fixed";
+
+    assessments.push({
+      vendor: "Red Hat",
+      productName,
+      packageName:
+        getString(
+          releaseObject,
+          "package",
+        ) ?? "unspecified",
+      cpe:
+        getString(
+          releaseObject,
+          "cpe",
+        ) ?? null,
+      status: "fixed",
+      originalStatus,
+      sourceUrl: evidence.url,
+      retrievedAt:
+        evidence.retrievedAt,
+      evidenceId: evidence.id,
+      reason: originalStatus,
+    });
   }
 
-  const assessments: Array<{
-    vendor: string;
-    productName: string;
-    packageName: string;
-    cpe: string | null;
-    status: "affected" | "not_affected" | "unknown";
-    originalStatus: string;
-    sourceUrl: string;
-    retrievedAt: string;
-    evidenceId: string;
-    reason: string;
-  }> = [];
+  const packageState =
+    getArray(
+      evidence.facts,
+      "package_state",
+    ) ?? [];
 
   for (
     const state of packageState
@@ -921,6 +996,79 @@ function extractRedHatVendorImpact(
   }
 
   return assessments;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Conflicting evidence                                                       */
+/* -------------------------------------------------------------------------- */
+
+function findCvssConflicts(
+  cvss: CvssDetails,
+  nvdEvidence: Evidence | undefined,
+  redhatEvidence: Evidence | undefined,
+): EvidenceConflict[] {
+  if (cvss.baseScore === null) {
+    return [];
+  }
+
+  const scores = new Map<string, number>([
+    [cvss.source ?? "NVD", cvss.baseScore],
+  ]);
+
+  const metrics =
+    nvdEvidence
+      ? getNestedObject(
+        nvdEvidence.facts,
+        "metrics",
+      ) ?? {}
+      : {};
+
+  for (const list of Object.values(metrics)) {
+    for (const metric of Array.isArray(list) ? list : []) {
+      const object = (metric ?? {}) as Record<string, unknown>;
+
+      const data =
+        getNestedObject(object, "cvssData");
+
+      const score =
+        data && getNumber(data, "baseScore");
+
+      if (
+        score !== undefined &&
+        data?.version === cvss.version
+      ) {
+        const source =
+          getString(object, "source") ?? "NVD";
+
+        if (!scores.has(source)) {
+          scores.set(source, score);
+        }
+      }
+    }
+  }
+
+  const redhatScore =
+    redhatEvidence && cvss.version?.startsWith("3")
+      ? redHatCvssScore(redhatEvidence)
+      : null;
+
+  if (redhatScore !== null) {
+    scores.set("Red Hat", redhatScore);
+  }
+
+  if (new Set(scores.values()).size < 2) {
+    return [];
+  }
+
+  return [
+    {
+      field: "cvss.baseScore",
+      values: Array.from(
+        scores,
+        ([source, value]) => ({ source, value }),
+      ),
+    },
+  ];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1610,8 +1758,9 @@ export async function investigateCve(
       addConfirmedFact(
         confirmedFacts,
         factProvenance,
-        fact,
+        fact.claim,
         redhatEvidence.id,
+        fact.field,
       );
     }
   }
@@ -1647,6 +1796,13 @@ export async function investigateCve(
     affectedVersions,
 
     vendorImpact,
+
+    conflicts:
+      findCvssConflicts(
+        cvss,
+        nvdEvidence,
+        redhatEvidence,
+      ),
   };
 
   /* ----------------------------------------------------------------------- */
