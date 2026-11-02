@@ -1380,9 +1380,12 @@ export async function investigateCve(
     nvdProviderResult.status ===
     "observed_absence"
   ) {
-    const message = `NVD successfully responded but returned no matching record for ${cveId}.`;
-    limitations.push(message);
-    coreLimitations.push(message);
+    /*
+     * A completed check, not a failure: it must not count toward "failed".
+     */
+    limitations.push(
+      `NVD successfully responded but returned no matching record for ${cveId}.`,
+    );
   }
 
   const nvdFailure =
@@ -1480,6 +1483,9 @@ export async function investigateCve(
   let affectedVersions: string[] =
     [];
 
+  const nvdRejected =
+    nvdEvidence?.facts.vulnStatus === "Rejected";
+
   if (nvdEvidence) {
     const extracted =
       extractNvdFacts(
@@ -1507,6 +1513,12 @@ export async function investigateCve(
 
     affectedVersions =
       extracted.affectedVersions;
+
+    if (nvdRejected) {
+      limitations.push(
+        `NVD marks ${cveId} as Rejected. Do not treat it as a valid vulnerability without checking the rejection reason.`,
+      );
+    }
   }
 
   /* ----------------------------------------------------------------------- */
@@ -1661,7 +1673,7 @@ export async function investigateCve(
   /*
    * CONFIRMED
    *
-   * Both authoritative providers (NVD and CISA) completed their checks successfully.
+   * NVD returned a valid record and CISA completed its check.
    *
    * CISA observed absence counts as a completed check. It should NOT force
    * the whole investigation into "partial" merely because there is no KEV
@@ -1678,9 +1690,10 @@ export async function investigateCve(
    * => confirmed
    */
   if (
+    hasNvdEvidence &&
+    !nvdRejected &&
     nvdCompleted &&
-    cisaCompleted &&
-    coreLimitations.length === 0
+    cisaCompleted
   ) {
     status =
       "confirmed";
@@ -1697,6 +1710,7 @@ export async function investigateCve(
    * NVD success + CISA timeout
    * NVD success + CISA error
    * NVD observed absence + CISA listed
+   * NVD record marked Rejected
    */
   else if (
     hasNvdEvidence ||
@@ -1738,10 +1752,21 @@ export async function investigateCve(
   /* ----------------------------------------------------------------------- */
 
   const analystGuidance =
-    buildAnalystGuidance(
-      cveId,
-      kevStatus,
+    status === "not-found"
+      ? [
+        `${cveId} was not found in NVD or CISA KEV. Check the identifier for typos; a recently assigned CVE may not be published yet.`,
+        "Do not treat this result as evidence that the identifier is harmless.",
+      ]
+      : buildAnalystGuidance(
+        cveId,
+        kevStatus,
+      );
+
+  if (nvdRejected) {
+    analystGuidance.unshift(
+      `NVD marks ${cveId} as Rejected; confirm the rejection reason before acting on the guidance below.`,
     );
+  }
 
   /* ----------------------------------------------------------------------- */
   /* Final result                                                             */

@@ -56,6 +56,20 @@ export async function fetchRedHatCve(
       ),
     });
 
+    /*
+     * Red Hat answers 404 for CVEs it does not track. The check completed,
+     * so this is an observed absence, not a provider failure.
+     */
+    if (response.status === 404) {
+      return {
+        provider: "REDHAT",
+        status: "observed_absence",
+        evidence: null,
+        error: null,
+        checkedAt,
+      };
+    }
+
     if (!response.ok) {
       let body = "";
 
