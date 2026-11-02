@@ -135,6 +135,12 @@ export type ProviderResult = {
    * Timestamp of the provider operation.
    */
   checkedAt: string;
+
+  /**
+   * The KEV catalog release that was checked. An absence has no evidence
+   * record, so this is what ties "not listed" to a point in time.
+   */
+  catalogVersion?: string;
 };
 
 export type VendorImpactStatus =

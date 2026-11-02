@@ -1,13 +1,15 @@
 {
   "name": "threatintel-ai-engine",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Evidence-first CVE investigation tool for ThreatIntel AI on OpenClaw.",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "validate": "openclaw plugins validate --entry ./dist/index.js",
+    "replay": "node ./dist/persistence/replay-cli.js",
     "test:contract": "node ./dist/test-plugin-contract.js",
+    "test:replay": "node ./dist/persistence/test-replay.js",
     "test:cve": "node ./dist/test-golden.js",
     "test:faults": "node ./dist/test-faults.js",
     "test:validation": "node ./dist/test-validation.js",

@@ -17,6 +17,7 @@ export type InvestigationContext = {
         providerResults: unknown[];
         limitations: string[];
         analystGuidance: string[];
+        engineVersion: string | null;
         createdAt: string;
     };
 
@@ -38,6 +39,7 @@ export type EvidenceContext = {
     retrievedAt: string;
     rawPayload: Record<string, unknown>;
     sourceReferences: unknown[];
+    contentSha256: string | null;
 };
 
 export type FactContext = {
@@ -68,6 +70,7 @@ type InvestigationRow = {
     provider_results: unknown[];
     limitations: string[];
     analyst_guidance: string[];
+    engine_version: string | null;
     created_at: Date;
 };
 
@@ -82,6 +85,7 @@ type EvidenceRow = {
     retrieved_at: Date;
     raw_payload: Record<string, unknown>;
     source_references: unknown[];
+    content_sha256: string | null;
 };
 
 type FactRow = {
@@ -127,6 +131,7 @@ export async function getInvestigationContext(
           provider_results,
           limitations,
           analyst_guidance,
+          engine_version,
           created_at
         FROM investigations
         WHERE id = $1
@@ -157,7 +162,8 @@ export async function getInvestigationContext(
           confidence,
           retrieved_at,
           raw_payload,
-          source_references
+          source_references,
+          content_sha256
         FROM evidence
         WHERE investigation_id = $1
         ORDER BY retrieved_at ASC
@@ -209,6 +215,7 @@ export async function getInvestigationContext(
             retrievedAt: row.retrieved_at.toISOString(),
             rawPayload: row.raw_payload,
             sourceReferences: row.source_references,
+            contentSha256: row.content_sha256,
         }),
     );
 
@@ -277,6 +284,7 @@ export async function getInvestigationContext(
                 investigation.limitations,
             analystGuidance:
                 investigation.analyst_guidance,
+            engineVersion: investigation.engine_version,
             createdAt:
                 investigation.created_at.toISOString(),
         },

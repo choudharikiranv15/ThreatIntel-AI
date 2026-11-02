@@ -69,6 +69,7 @@ export type InvestigationView = {
         status: string;
         checkedAt: string | null;
         error: string | null;
+        catalogVersion?: string;
     }[];
     facts: ViewFact[];
     inferences: {
@@ -165,6 +166,9 @@ function providerRows(
                 typeof row.error === "string"
                     ? clip(row.error, tier.text)
                     : null,
+            ...(typeof row.catalogVersion === "string"
+                ? { catalogVersion: row.catalogVersion }
+                : {}),
         };
     });
 }

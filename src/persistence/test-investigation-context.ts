@@ -6,8 +6,12 @@ import {
     closeDatabase,
 } from "./db.js";
 
-const EXISTING_INVESTIGATION_ID =
-    "21be9895-948c-45e3-bdb2-bd80bf6d5119";
+import {
+    deleteSeededInvestigation,
+    seedInvestigation,
+} from "./test-seed.js";
+
+const TARGET = `CVE-2099-${Date.now()}`;
 
 async function main(): Promise<void> {
     try {
@@ -15,9 +19,12 @@ async function main(): Promise<void> {
             "Testing investigation context retrieval...",
         );
 
+        const investigationId =
+            await seedInvestigation(TARGET);
+
         const context =
             await getInvestigationContext(
-                EXISTING_INVESTIGATION_ID,
+                investigationId,
             );
 
         if (!context) {
@@ -48,7 +55,7 @@ async function main(): Promise<void> {
 
         if (
             context.investigation.id !==
-            EXISTING_INVESTIGATION_ID
+            investigationId
         ) {
             throw new Error(
                 "Returned investigation ID does not match requested ID",
@@ -57,7 +64,7 @@ async function main(): Promise<void> {
 
         if (
             context.investigation.target !==
-            "CVE-2024-3094"
+            TARGET
         ) {
             throw new Error(
                 "Unexpected investigation target",
@@ -153,6 +160,7 @@ async function main(): Promise<void> {
 
         process.exitCode = 1;
     } finally {
+        await deleteSeededInvestigation(TARGET);
         await closeDatabase();
     }
 }

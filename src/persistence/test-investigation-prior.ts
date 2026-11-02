@@ -6,15 +6,24 @@ import {
     closeDatabase,
 } from "./db.js";
 
+import {
+    deleteSeededInvestigation,
+    seedInvestigation,
+} from "./test-seed.js";
+
+const TARGET = `CVE-2099-${Date.now()}`;
+
 async function main(): Promise<void> {
     try {
         console.log(
             "Testing prior investigation retrieval...",
         );
 
+        await seedInvestigation(TARGET);
+
         const result =
             await getPriorInvestigation(
-                "CVE-2024-3094",
+                TARGET,
             );
 
         if (!result.found) {
@@ -74,7 +83,7 @@ async function main(): Promise<void> {
 
         if (
             result.context.investigation.target !==
-            "CVE-2024-3094"
+            TARGET
         ) {
             throw new Error(
                 "Unexpected investigation target",
@@ -152,6 +161,7 @@ async function main(): Promise<void> {
 
         process.exitCode = 1;
     } finally {
+        await deleteSeededInvestigation(TARGET);
         await closeDatabase();
     }
 }

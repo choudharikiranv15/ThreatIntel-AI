@@ -107,6 +107,7 @@ export async function fetchCisaKev(
         evidence: null,
         error: null,
         checkedAt,
+        catalogVersion: catalog.catalogVersion,
       };
     }
 
@@ -159,6 +160,7 @@ export async function fetchCisaKev(
       evidence,
       error: null,
       checkedAt,
+      catalogVersion: catalog.catalogVersion,
     };
   } catch (error) {
     const timeout =

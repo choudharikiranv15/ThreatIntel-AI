@@ -1,6 +1,8 @@
 
 import { db } from "./db.js";
 import type { InvestigationResult } from "../types.js";
+import { ENGINE_VERSION } from "../version.js";
+import { hashPayload } from "./evidence-hash.js";
 
 export async function persistInvestigation(
     result: InvestigationResult,
@@ -21,9 +23,10 @@ export async function persistInvestigation(
                 summary,
                 provider_results,
                 limitations,
-                analyst_guidance
+                analyst_guidance,
+                engine_version
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING id
         `;
 
@@ -38,6 +41,7 @@ export async function persistInvestigation(
                 JSON.stringify(result.providerResults),
                 JSON.stringify(result.limitations),
                 JSON.stringify(result.analystGuidance),
+                ENGINE_VERSION,
             ],
         );
 
@@ -58,9 +62,10 @@ export async function persistInvestigation(
                 confidence,
                 retrieved_at,
                 raw_payload,
-                source_references
+                source_references,
+                content_sha256
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             RETURNING id
         `;
 
@@ -80,6 +85,7 @@ export async function persistInvestigation(
                     evidence.retrievedAt,
                     JSON.stringify(evidence.facts),
                     JSON.stringify(evidence.references),
+                    hashPayload(evidence.facts),
                 ],
             );
 

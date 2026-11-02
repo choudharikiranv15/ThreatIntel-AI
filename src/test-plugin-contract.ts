@@ -87,7 +87,10 @@ globalThis.fetch = (async (input: string | URL | Request) => {
     if (url.includes("cisa.gov")) {
         return kevFails
             ? new Response("remote-error-body", { status: 503 })
-            : Response.json({ vulnerabilities: [] });
+            : Response.json({
+                catalogVersion: "2099.01.01",
+                vulnerabilities: [],
+            });
     }
 
     return Response.json(redHatRecord);
@@ -119,6 +122,7 @@ function insert(sql: string, params: unknown[]): { rows: Row[] } {
             provider_results: JSON.parse(String(params[5])),
             limitations: JSON.parse(String(params[6])),
             analyst_guidance: JSON.parse(String(params[7])),
+            engine_version: params[8],
             created_at: createdAt,
         });
     } else if (sql.includes("INTO evidence")) {
@@ -134,6 +138,7 @@ function insert(sql: string, params: unknown[]): { rows: Row[] } {
             retrieved_at: new Date(String(params[7])),
             raw_payload: JSON.parse(String(params[8])),
             source_references: JSON.parse(String(params[9])),
+            content_sha256: params[10],
         });
     } else if (sql.includes("INTO facts")) {
         tables.facts.push({
@@ -302,6 +307,14 @@ async function main(): Promise<void> {
     assert(freshView.mode === "refreshed", "first run should be fresh");
 
     console.log(`✓ Fresh result is ${fresh.text.length} chars with all providers`);
+
+    assert(
+        freshView.inferences.some((inference) =>
+            inference.claim.includes("catalog version 2099.01.01"),
+        ) &&
+        fresh.text.includes('"catalogVersion": "2099.01.01"'),
+        "a KEV absence must name the catalog it was checked against",
+    );
 
     /* The second run reuses the persisted row and has the same shape. */
     const reused = await callTool("threatintel_investigate", {

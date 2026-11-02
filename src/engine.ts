@@ -1097,6 +1097,7 @@ function buildInferences(
   cveId: string,
   summary: InvestigationResult["summary"],
   factProvenance: EvidenceFactRecord[],
+  kevCatalogVersion: string | undefined,
 ): {
   inferences: string[];
   provenance: InferenceRecord[];
@@ -1163,7 +1164,7 @@ function buildInferences(
     "not-listed"
   ) {
     const claim =
-      `CISA KEV did not contain ${cveId} at retrieval time; this does not establish that exploitation has not occurred.`;
+      `CISA KEV${kevCatalogVersion ? ` catalog version ${kevCatalogVersion}` : ""} did not contain ${cveId} at retrieval time; this does not establish that exploitation has not occurred.`;
 
     addInference(
       inferences,
@@ -1814,6 +1815,7 @@ export async function investigateCve(
       cveId,
       summary,
       factProvenance,
+      cisaProviderResult.catalogVersion,
     );
 
   const inferences =

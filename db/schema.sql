@@ -2,7 +2,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict aj6IgHAycWf2GdXcNNlZ7j9QIqQJXGfguIT9dWCccKBJH7XU8wJlWNrCrjQ4Q2W
 
 -- Dumped from database version 17.7
 -- Dumped by pg_dump version 17.7
@@ -210,5 +209,4 @@ ALTER TABLE ONLY public.inferences
 -- PostgreSQL database dump complete
 --
 
-\unrestrict aj6IgHAycWf2GdXcNNlZ7j9QIqQJXGfguIT9dWCccKBJH7XU8wJlWNrCrjQ4Q2W
 
