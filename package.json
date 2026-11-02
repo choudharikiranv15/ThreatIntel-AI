@@ -7,6 +7,10 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "validate": "openclaw plugins validate --entry ./dist/index.js",
+    "test": "npm run build && npm run test:contract && npm run test:accuracy && npm run test:faults && npm run test:validation && npm run test:provenance && npm run test:timestamps && npm run test:redhat && npm run test:policy && npm run test:service && npm run test:verification && npm run test:verification:integration && npm run test:reference-provenance",
+    "test:database": "npm run test:db && npm run test:persistence && npm run test:history && npm run test:context && npm run test:prior && npm run test:rollback && npm run test:integrity && npm run test:concurrency && npm run test:replay",
+    "test:live": "npm run test:cve && npm run test:redhat:golden",
+    "test:accuracy": "node ./dist/test-engine-accuracy.js",
     "replay": "node ./dist/persistence/replay-cli.js",
     "test:contract": "node ./dist/test-plugin-contract.js",
     "test:replay": "node ./dist/persistence/test-replay.js",
@@ -23,13 +27,13 @@
     "test:context": "node ./dist/persistence/test-investigation-context.js",
     "test:prior": "node ./dist/persistence/test-investigation-prior.js",
     "test:policy": "node ./dist/persistence/test-investigation-policy.js",
-    "test:verification": "tsx src/verification/verify-claim.test.ts",
-    "test:verification:integration": "tsx src/verification/test-engine-integration.ts",
+    "test:verification": "node ./dist/verification/verify-claim.test.js",
+    "test:verification:integration": "node ./dist/verification/test-engine-integration.js",
     "test:service": "node ./dist/persistence/test-investigation-service.js",
     "test:rollback": "node ./dist/persistence/test-rollback.js",
     "test:integrity": "node ./dist/persistence/test-cross-investigation.js",
     "test:concurrency": "node ./dist/persistence/test-concurrency.js",
-    "test:reference-provenance": "tsx src/reference-provenance.test.ts"
+    "test:reference-provenance": "node ./dist/reference-provenance.test.js"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.52",

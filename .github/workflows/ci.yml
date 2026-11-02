@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: threatintel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      THREATINTEL_DB_HOST: localhost
+      THREATINTEL_DB_PORT: 5432
+      THREATINTEL_DB_NAME: threatintel
+      THREATINTEL_DB_USER: postgres
+      THREATINTEL_DB_PASSWORD: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Offline tests
+        run: npm test
+
+      - name: Plugin manifest
+        run: npm run validate
+
+      - name: Apply schema and migrations
+        run: |
+          psql -h localhost -U postgres -d threatintel -v ON_ERROR_STOP=1 -q -f db/schema.sql
+          for migration in db/migrations/*.sql; do
+            psql -h localhost -U postgres -d threatintel -v ON_ERROR_STOP=1 -q -f "$migration"
+          done
+
+      - name: Database tests
+        run: npm run test:database

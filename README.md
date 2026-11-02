@@ -1,4 +1,4 @@
-# ThreatIntel AI Engine v0.2
+# ThreatIntel AI Engine v0.3
 
 A CVE investigation engine for ThreatIntel AI. Retrieves authoritative evidence from external intelligence sources and structures it for LLM-assisted SOC analysis.
 
@@ -8,6 +8,7 @@ Given a CVE identifier, the engine:
 
 - Retrieves the NVD CVE record (CVSS, CWE, affected configurations, references)
 - Checks CISA Known Exploited Vulnerabilities (KEV) catalog status
+- Retrieves Red Hat vendor impact, including shipped fixes, and reports CVSS disagreements between sources
 - Validates every provider response against a strict contract before accepting it
 - Generates human-readable confirmed facts backed by traceable evidence
 - Produces conservative analytical inferences with explicit supporting fact references
@@ -31,18 +32,17 @@ npm run validate
 ## Tests
 
 ```powershell
-# Integration test against live NVD and CISA APIs
-npm run test:cve
+# Build, then run everything that needs no network or database
+npm test
 
-# Fault-injection tests (provider timeouts, errors, absences)
-npm run test:faults
+# Needs PostgreSQL with the schema and migrations applied
+npm run test:database
 
-# Provider contract validation tests
-npm run test:validation
-
-# Provenance graph integrity tests
-npm run test:provenance
+# Calls the live NVD, CISA, and Red Hat APIs
+npm run test:live
 ```
+
+CI runs `npm test` and `npm run test:database` against a real PostgreSQL service on every push and pull request.
 
 The primary regression case is `CVE-2024-3094`. Expected outcome: `confirmed` status, CVSS 10 CRITICAL, KEV `not-listed`.
 
@@ -66,6 +66,24 @@ The answer gate reads the model's final answer, so OpenClaw only runs it after y
 openclaw config set plugins.entries.threatintel-ai-engine.hooks.allowConversationAccess true
 openclaw gateway restart
 ```
+
+## Database
+
+For a new database, apply `db/schema.sql`, then every file in `db/migrations/` in order. For an existing database, including Supabase, apply only the migrations you have not run yet, using the Supabase SQL editor or `psql`.
+
+**Apply `db/migrations/001_evidence_integrity.sql` before deploying v0.3.** Until then, saving investigations fails, and tool results report `persisted: false`.
+
+Migration 001 also enables row-level security with no policies. That blocks Supabase's `anon` and `authenticated` Data API roles, while the table owner the plugin connects as keeps access.
+
+Remote connections use TLS by default, without verifying the server certificate. To verify it, set `THREATINTEL_DB_SSL=verify-full` and `THREATINTEL_DB_SSL_CA` to the path of your provider's CA file. `THREATINTEL_DB_SSL=disable` turns TLS off.
+
+To check that a saved investigation still matches its evidence, with no network access:
+
+```powershell
+npm run replay -- <investigation-id>
+```
+
+Replay re-derives the investigation from stored provider results and checks each evidence record against its SHA-256 hash. Investigations saved before migration 001 report `not_hashed`, and can differ if the extraction logic has changed since.
 
 ## Tool output and answer checking
 
