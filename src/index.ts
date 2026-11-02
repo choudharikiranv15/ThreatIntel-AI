@@ -13,10 +13,15 @@ import {
 } from "./persistence/investigation-service.js";
 
 import {
-  classifyEvidenceReferences,
-} from "./reference-provenance.js";
+  viewFromContext,
+  viewFromResult,
+} from "./tool-result.js";
 
-export default defineToolPlugin({
+import {
+  registerAnswerGate,
+} from "./verification/answer-gate.js";
+
+const entry = defineToolPlugin({
   id: "threatintel-ai-engine",
 
   name: "ThreatIntel AI Engine",
@@ -74,10 +79,7 @@ export default defineToolPlugin({
         "Never convert an unavailable or failed source into a negative finding.",
         "Distinguish CISA KEV listed, not-listed, and unknown states.",
         "Use returned structured fields as the source of truth.",
-        "Treat verifications as authoritative claim-status metadata.",
-        "Do not describe a claim as confirmed unless its verification state is confirmed.",
-        "Treat contradicted claims as contradicted, not confirmed.",
-        "Treat unknown claims as unknown, not negative findings.",
+        "Lists under summary and evidence report total and omitted counts; state when a list is incomplete instead of implying it is exhaustive.",
         "Clearly separate confirmed facts, analysis and inferences, and SOC guidance.",
         "Surface conflicting evidence instead of silently resolving conflicts.",
         "A reused investigation is historical persisted intelligence, not a guarantee that the target's current state has not changed.",
@@ -147,40 +149,7 @@ export default defineToolPlugin({
           return {
             mode: "reused",
 
-            target: execution.prior.target,
-
-            investigation: execution.freshResult
-              ? {
-                ...execution.freshResult,
-                evidence: execution.freshResult.evidence.map(
-                  (item) => ({
-                    ...item,
-                    references: classifyEvidenceReferences(
-                      item.references,
-                    ),
-                  }),
-                ),
-              }
-              : null,
-
-            evidence: execution.prior.context.evidence.map(
-              (item) => ({
-                ...item,
-                sourceReferences: classifyEvidenceReferences(
-                  item.sourceReferences as {
-                    title: string;
-                    url: string;
-                    retrieved: boolean;
-                  }[],
-                ),
-              }),
-            ),
-
-            facts:
-              execution.prior.context.facts,
-
-            inferences:
-              execution.prior.context.inferences,
+            ...viewFromContext(execution.prior.context),
 
             priorDecision:
               execution.prior.decision,
@@ -193,19 +162,25 @@ export default defineToolPlugin({
               note:
                 "Reused an existing persisted investigation; no new investigation was created.",
             },
+
+            persistenceWarning: null,
           };
+        }
+
+        if (!execution.freshResult) {
+          throw new Error(
+            "Investigation completed without a result.",
+          );
         }
 
         return {
           mode: "refreshed",
 
-          target: execution.freshResult?.target ?? target,
-
-          investigation: execution.freshResult,
-
-          persistence: execution.persistence,
+          ...viewFromResult(execution.freshResult),
 
           priorDecision: execution.prior.decision,
+
+          persistence: execution.persistence,
 
           persistenceWarning:
             execution.persistence?.persisted === false
@@ -228,7 +203,7 @@ export default defineToolPlugin({
       description: [
         "Retrieve the latest persisted investigation for a cybersecurity target.",
         "Use this tool to inspect historical intelligence and persisted evidence.",
-        "Returns investigation metadata together with persisted evidence, facts, and inferences when available.",
+        "Returns investigation metadata together with persisted provider results, evidence metadata, facts, and inferences when available.",
         "Treat prior context as historical evidence, not as a replacement for fresh authoritative retrieval when freshness matters.",
         "If no prior investigation exists, the tool returns found=false.",
         "Never interpret the absence of a prior investigation as evidence that the target is safe or harmless.",
@@ -248,10 +223,29 @@ export default defineToolPlugin({
       ) {
         context.signal?.throwIfAborted();
 
-        return await getPriorInvestigation(
+        const prior = await getPriorInvestigation(
           String(target),
         );
+
+        return {
+          target: prior.target,
+          found: prior.found,
+          latestInvestigation: prior.latestInvestigation,
+          decision: prior.decision,
+          investigation: prior.context
+            ? viewFromContext(prior.context)
+            : null,
+        };
       },
     }),
   ],
 });
+
+const registerTools = entry.register;
+
+entry.register = (api) => {
+  registerTools(api);
+  registerAnswerGate(api);
+};
+
+export default entry;

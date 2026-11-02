@@ -84,7 +84,6 @@ function makeInvestigation(
 
         limitations: [],
         analystGuidance: [],
-        verifications: [],
     };
 }
 

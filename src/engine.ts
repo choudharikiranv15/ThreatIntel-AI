@@ -16,7 +16,6 @@ import {
 
 import {
   verifyCvssClaim,
-  verifyKevClaim,
   type CvssClaim,
 } from "./verification/index.js";
 
@@ -1147,7 +1146,6 @@ export async function investigateCve(
    */
   if (!isCve(cveId)) {
     return {
-      verifications: [],
       target: rawTarget,
 
       targetType: "cve",
@@ -1750,27 +1748,6 @@ export async function investigateCve(
   /* ----------------------------------------------------------------------- */
 
   return {
-    verifications: [
-      verifyCvssClaim({
-        claim: {
-          baseScore: summary.cvss.baseScore ?? undefined,
-          version: summary.cvss.version ?? undefined,
-          vector: summary.cvss.vector ?? undefined,
-          severity: summary.cvss.severity ?? undefined,
-        },
-        observed: summary.cvss,
-        factProvenance,
-      }),
-
-      verifyKevClaim({
-        claim: {
-          listed: true,
-        },
-        observed: kevStatus,
-        factProvenance,
-      }),
-    ],
-
     target: cveId,
 
     targetType: "cve",

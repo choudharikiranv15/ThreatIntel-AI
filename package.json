@@ -7,6 +7,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "validate": "openclaw plugins validate --entry ./dist/index.js",
+    "test:contract": "node ./dist/test-plugin-contract.js",
     "test:cve": "node ./dist/test-golden.js",
     "test:faults": "node ./dist/test-faults.js",
     "test:validation": "node ./dist/test-validation.js",

@@ -7,7 +7,6 @@ import type {
 } from "../types.js";
 
 const investigationWithCvss: InvestigationResult = {
-    verifications: [],
     target: "CVE-TEST-0001",
     targetType: "cve",
     investigationType: "vulnerability",

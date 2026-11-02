@@ -49,7 +49,7 @@ The primary regression case is `CVE-2024-3094`. Expected outcome: `confirmed` st
 ## Install into OpenClaw
 
 ```powershell
-openclaw plugins install --link . --force
+openclaw plugins install --link .
 openclaw plugins enable threatintel-ai-engine
 openclaw gateway restart
 ```
@@ -59,6 +59,20 @@ Then verify:
 ```powershell
 openclaw plugins inspect threatintel-ai-engine --runtime --json
 ```
+
+The answer gate reads the model's final answer, so OpenClaw only runs it after you allow conversation access for this plugin:
+
+```powershell
+openclaw config set plugins.entries.threatintel-ai-engine.hooks.allowConversationAccess true
+openclaw gateway restart
+```
+
+## Tool output and answer checking
+
+- Tool results stay under 16,000 characters, the lowest default OpenClaw cap, so truncation cannot remove sections. Fresh and reused investigations share one schema. Raw source payloads stay in PostgreSQL, and capped lists report `total` and `omitted`.
+- Before a final answer is accepted, a deterministic gate compares its CVE IDs, CVSS score, severity, KEV state, and version numbers with the investigation results from that session. A mismatch triggers one revision pass. If the answer is still wrong, or the hook times out, the original answer is delivered and the mismatch is only logged. The gate is a floor against fabrication, not a check that the reasoning is correct.
+
+`npm run build; npm run test:contract` runs the real plugin entry offline, faking only the network and database socket.
 
 ## Design rules
 

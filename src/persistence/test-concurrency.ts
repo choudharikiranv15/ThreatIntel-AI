@@ -84,7 +84,6 @@ function createResult(
         providerResults: [],
         limitations: [],
         analystGuidance: [],
-        verifications: [],
     };
 }
 
