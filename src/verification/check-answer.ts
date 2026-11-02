@@ -32,6 +32,17 @@ const KEV_NEGATIVE_PATTERN =
 const KEV_POSITIVE_PATTERN =
     /\b(?:listed|included|added|present|appears)\b/i;
 
+/* A segment correcting a claim repeats it; that is not asserting it. */
+const REJECTED_CLAIM_PATTERN =
+    /\b(?:incorrect|inaccurate|wrong|false|claimed|claims?|contradict\w*|rather\s+than|instead\s+of|not\s+correct|not\s+accurate)\b/i;
+
+const FRESH_RETRIEVAL_PATTERN =
+    /\b(?:just|freshly|newly)\s+(?:retrieved|fetched|pulled|obtained|checked|queried)\b|\bretrieved\s+just\s+now\b/i;
+
+export function claimsFreshRetrieval(answer: string): boolean {
+    return FRESH_RETRIEVAL_PATTERN.test(answer);
+}
+
 function findCves(text: string): string[] {
     return Array.from(
         new Set(
@@ -134,6 +145,17 @@ function checkSegment(
     }
 }
 
+export function mentionsInvestigated(
+    answer: string,
+    views: InvestigationView[],
+): boolean {
+    const targets = new Set(
+        views.map((view) => view.target.toUpperCase()),
+    );
+
+    return findCves(answer).some((id) => targets.has(id));
+}
+
 export function checkAnswer(
     answer: string,
     views: InvestigationView[],
@@ -164,6 +186,10 @@ export function checkAnswer(
     }
 
     for (const segment of answer.split(/\n|(?<=[.!?;])\s+/)) {
+        if (REJECTED_CLAIM_PATTERN.test(segment)) {
+            continue;
+        }
+
         for (const version of segment.match(VERSION_PATTERN) ?? []) {
             if (
                 VERSION_CONTEXT_PATTERN.test(segment) &&

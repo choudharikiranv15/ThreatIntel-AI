@@ -557,6 +557,127 @@ async function main(): Promise<void> {
 
     console.log("✓ Gate passes faithful answers and stays bounded");
 
+    /* Correcting a claim repeats it, and must not be treated as asserting it. */
+    for (const correction of [
+        `The claimed CVSS score of 9.8 for ${CVE} is incorrect; it is 10.`,
+        `It is wrong that ${CVE} is listed in CISA KEV.`,
+        `${CVE} has CVSS 10 rather than CVSS 9.8.`,
+    ]) {
+        const decision = gate(correction);
+
+        assert(
+            decision === undefined,
+            `gate must not flag a correction: ${correction}: ${decision?.reason}`,
+        );
+    }
+
+    console.log("✓ Gate does not flag answers that correct a false claim");
+
+    /* A known-wrong answer is marked at delivery, on either delivery path. */
+    const messageSending = hooks.get("message_sending");
+    const replyPayloadSending = hooks.get("reply_payload_sending");
+
+    assert(
+        messageSending && replyPayloadSending,
+        "delivery hooks should be registered",
+    );
+
+    const wrong = `${CVE} has a CVSS base score of 9.8 and is listed in CISA KEV.`;
+
+    const sent = messageSending({ to: "x", content: wrong }, session) as
+        | { content?: string }
+        | undefined;
+
+    assert(
+        sent?.content?.startsWith("⚠️") &&
+        sent.content.includes("CVSS base score 9.8") &&
+        sent.content.includes("KEV listed") &&
+        sent.content.endsWith(wrong),
+        "a wrong message must carry a warning and keep its text",
+    );
+
+    const replied = replyPayloadSending(
+        { payload: { text: wrong, isError: false }, kind: "final" },
+        session,
+    ) as { payload?: { text?: string; isError?: boolean } } | undefined;
+
+    assert(
+        replied?.payload?.text?.startsWith("⚠️") &&
+        replied.payload.isError === false,
+        "a wrong reply payload must carry a warning and keep its fields",
+    );
+
+    assert(
+        messageSending({ to: "x", content: sent?.content }, session) ===
+        undefined,
+        "a message must not be warned twice across delivery paths",
+    );
+
+    assert(
+        messageSending(
+            { to: "x", content: `${CVE} has CVSS base score 10.` },
+            session,
+        ) === undefined,
+        "a correct message must be untouched",
+    );
+
+    assert(
+        messageSending({ to: "x", content: wrong }, {}) === undefined &&
+        messageSending(
+            { to: "x", content: wrong },
+            { sessionKey: "other-session" },
+        ) === undefined,
+        "evidence must not be applied across sessions",
+    );
+
+    console.log("✓ A wrong answer is marked at delivery, once, in its own session");
+
+    /* "Just retrieved" must be true for the run that says it. */
+    const freshClaim = `I just retrieved the data for ${CVE}.`;
+
+    afterToolCall(
+        {
+            toolName: "threatintel_investigate",
+            result: fresh.result,
+            runId: "run-with-retrieval",
+        },
+        session,
+    );
+
+    assert(
+        gate(freshClaim, { runId: "run-with-retrieval" }) === undefined,
+        "a run that queried providers may say it just retrieved data",
+    );
+
+    const laterTurn = gate(freshClaim, { runId: "later-run" });
+
+    assert(
+        laterTurn?.action === "revise" &&
+        laterTurn.reason?.includes("checkedAt"),
+        "a later turn must not claim a fresh retrieval",
+    );
+
+    assert(
+        gate(freshClaim) === undefined,
+        "an unknown run must not trigger a freshness retry",
+    );
+
+    afterToolCall(
+        {
+            toolName: "threatintel_investigate",
+            result: reused.result,
+            runId: "run-with-reuse",
+        },
+        session,
+    );
+
+    assert(
+        gate(freshClaim, { runId: "run-with-reuse" })?.action === "revise",
+        "a reused result is not a fresh retrieval",
+    );
+
+    console.log("✓ Gate rejects false claims of a fresh retrieval");
+
     console.log("Plugin contract tests PASSED");
 }
 

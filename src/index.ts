@@ -91,6 +91,7 @@ const entry = defineToolPlugin({
         "Report every entry in summary.conflicts, naming each source's value; never silently pick one.",
         "A vendor impact status of fixed means the vendor shipped a fix for that product, so the product was affected before the fix.",
         "A reused investigation is historical persisted intelligence, not a guarantee that the target's current state has not changed.",
+        "Results stay in the conversation but do not update. Never say data was just retrieved unless a provider was queried in this turn; otherwise state when it was retrieved, using checkedAt.",
 
         "Distinguish evidence retrieved directly by a provider from URLs merely listed in that provider's record.",
         "Treat a source reference with retrieved=false as a listed but not independently retrieved URL.",

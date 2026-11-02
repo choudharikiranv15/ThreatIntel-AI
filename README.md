@@ -88,7 +88,7 @@ Replay re-derives the investigation from stored provider results and checks each
 ## Tool output and answer checking
 
 - Tool results stay under 16,000 characters, the lowest default OpenClaw cap, so truncation cannot remove sections. Fresh and reused investigations share one schema. Raw source payloads stay in PostgreSQL, and capped lists report `total` and `omitted`.
-- Before a final answer is accepted, a deterministic gate compares its CVE IDs, CVSS score, severity, KEV state, and version numbers with the investigation results from that session. A mismatch triggers one revision pass. If the answer is still wrong, or the hook times out, the original answer is delivered and the mismatch is only logged. The gate is a floor against fabrication, not a check that the reasoning is correct.
+- Before a final answer is accepted, a deterministic gate compares its CVE IDs, CVSS score, severity, KEV state, and version numbers with the investigation results from that session. A mismatch triggers one revision pass. If a delivered message still conflicts with the evidence, it is sent with a visible warning listing the conflict. The gate also asks for a revision when an answer says data was just retrieved but no provider was queried in that turn. It skips sentences that reject a claim, such as "the claimed 9.8 is incorrect". The gate is a floor against fabrication, not a check that the reasoning is correct.
 
 `npm run build; npm run test:contract` runs the real plugin entry offline, faking only the network and database socket.
 
