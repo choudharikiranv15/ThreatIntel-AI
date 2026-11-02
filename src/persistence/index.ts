@@ -1,4 +1,5 @@
 import type { InvestigationResult } from "../types.js";
+import { safeDatabaseError } from "./db.js";
 import { persistInvestigation } from "./persist-investigation.js";
 
 export type PersistenceResult = {
@@ -23,10 +24,7 @@ export async function persistInvestigationResult(
         return {
             persisted: false,
             investigationId: null,
-            error:
-                error instanceof Error
-                    ? error.message
-                    : String(error),
+            error: safeDatabaseError("Saving the investigation", error),
         };
     }
 }

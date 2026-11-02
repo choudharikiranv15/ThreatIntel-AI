@@ -320,52 +320,40 @@ async function runTests(): Promise<void> {
     }
 
     /*
-     * 7. A prior-lookup failure must stop execution.
-     * Never treat a database error as an absent prior investigation.
+     * 7. A prior-lookup failure must not block a fresh investigation, and must
+     * stay distinct from an absent prior investigation.
      */
     {
-        let investigateCalls = 0;
-        let persistCalls = 0;
-        let receivedExpectedError = false;
+        const realConsoleError = console.error;
 
-        try {
-            await investigateWithPriorPolicy(
-                "CVE-2024-3094",
-                {},
-                {
-                    getPrior: async () => {
-                        throw new Error("Database connection unavailable");
-                    },
-                    investigate: async () => {
-                        investigateCalls++;
-                        return makeInvestigation();
-                    },
-                    persist: async () => {
-                        persistCalls++;
-                        return makePersistence();
-                    },
+        console.error = () => undefined;
+
+        const result = await investigateWithPriorPolicy(
+            "CVE-2024-3094",
+            {},
+            {
+                getPrior: async () => {
+                    throw new Error("tenant/user postgres.secret not found");
                 },
-            );
-        } catch (error) {
-            receivedExpectedError =
-                error instanceof Error &&
-                error.message === "Database connection unavailable";
-        }
-
-        assert(
-            receivedExpectedError,
-            "prior-lookup error should propagate to the caller",
-        );
-        assert(
-            investigateCalls === 0,
-            "investigation must not run after a prior-lookup failure",
-        );
-        assert(
-            persistCalls === 0,
-            "persistence must not run after a prior-lookup failure",
+                investigate: async () => makeInvestigation(),
+                persist: async () => makePersistence(),
+            },
         );
 
-        console.log("✓ Prior-lookup failure stops execution safely");
+        console.error = realConsoleError;
+
+        assert(result.mode === "refreshed", "should investigate anyway");
+        assert(result.freshResult !== null, "should return the fresh result");
+        assert(
+            result.prior.lookupError !== undefined,
+            "lookup failure must stay visible",
+        );
+        assert(
+            !JSON.stringify(result.prior).includes("postgres.secret"),
+            "database details must not reach the result",
+        );
+
+        console.log("✓ Prior-lookup failure degrades without leaking details");
     }
 
     console.log("All investigation service tests PASSED.");

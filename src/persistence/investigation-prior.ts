@@ -25,6 +25,9 @@ export type PriorInvestigationResult = {
     decision: PriorDecision | null;
 
     context: InvestigationContext | null;
+
+    /** Set when history could not be read, as opposed to being empty. */
+    lookupError?: string;
 };
 
 export async function getPriorInvestigation(

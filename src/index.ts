@@ -5,7 +5,12 @@ import {
 } from "openclaw/plugin-sdk/tool-plugin";
 
 import {
+  safeDatabaseError,
+} from "./persistence/db.js";
+
+import {
   getPriorInvestigation,
+  type PriorInvestigationResult,
 } from "./persistence/investigation-prior.js";
 
 import {
@@ -68,6 +73,7 @@ const entry = defineToolPlugin({
         "Otherwise perform a fresh investigation using all available providers when required.",
         "Fresh investigations are persisted automatically when persistence succeeds.",
         "Always report persistence failures explicitly; never claim that an investigation was saved when persistence failed.",
+        "When priorLookupError is set, state that history was unavailable; do not say that no prior investigation exists.",
         "Return structured evidence including severity, CVSS, affected versions when explicitly available, CISA KEV status, vendor product impact assessments, evidence sources, confirmed facts, inferences, limitations, and SOC analyst guidance.",
         "Report affected versions only when supported by explicit vulnerability evidence; do not infer affected status from a product's mere presence in NVD metadata.",
         "Distinguish upstream software vulnerability status from vendor-specific product status.",
@@ -155,6 +161,8 @@ const entry = defineToolPlugin({
             priorDecision:
               execution.prior.decision,
 
+            priorLookupError: null,
+
             persistence: {
               persisted: true,
               investigationId:
@@ -180,6 +188,9 @@ const entry = defineToolPlugin({
           ...viewFromResult(execution.freshResult),
 
           priorDecision: execution.prior.decision,
+
+          priorLookupError:
+            execution.prior.lookupError ?? null,
 
           persistence: execution.persistence,
 
@@ -224,9 +235,20 @@ const entry = defineToolPlugin({
       ) {
         context.signal?.throwIfAborted();
 
-        const prior = await getPriorInvestigation(
-          String(target),
-        );
+        let prior: PriorInvestigationResult;
+
+        try {
+          prior = await getPriorInvestigation(
+            String(target),
+          );
+        } catch (error) {
+          throw new Error(
+            safeDatabaseError(
+              "Reading investigation history",
+              error,
+            ),
+          );
+        }
 
         return {
           target: prior.target,

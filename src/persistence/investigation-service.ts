@@ -1,6 +1,7 @@
 
 import type { InvestigationResult } from "../types.js";
 import { investigateCve } from "../engine.js";
+import { safeDatabaseError } from "./db.js";
 import {
     persistInvestigationResult,
     type PersistenceResult,
@@ -44,7 +45,33 @@ export async function investigateWithPriorPolicy(
         throw new Error("Investigation target must not be empty.");
     }
 
-    const prior = await dependencies.getPrior(normalizedTarget);
+    let prior: PriorInvestigationResult;
+
+    /*
+     * Threat intelligence does not depend on our database, so an outage must
+     * not block an investigation. lookupError keeps it distinct from "no prior
+     * investigation exists".
+     */
+    try {
+        prior = await dependencies.getPrior(normalizedTarget);
+    } catch (error) {
+        prior = {
+            target: normalizedTarget,
+            found: false,
+            latestInvestigation: null,
+            decision: {
+                decision: "refresh",
+                reason:
+                    "Investigation history could not be read, so a fresh investigation was performed.",
+                ageHours: null,
+            },
+            context: null,
+            lookupError: safeDatabaseError(
+                "Reading investigation history",
+                error,
+            ),
+        };
+    }
 
     if (
         !options.forceRefresh &&

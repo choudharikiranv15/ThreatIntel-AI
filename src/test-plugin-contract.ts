@@ -393,6 +393,57 @@ async function main(): Promise<void> {
 
     console.log("✓ KEV failure is visible as unknown");
 
+    /* A database outage still returns evidence, and leaks nothing. */
+    const realQuery = fakeDb.query;
+    const realConnect = fakeDb.connect;
+    const realConsoleError = console.error;
+    const secret = "tenant/user postgres.projectref not found";
+
+    const outage = async () => {
+        throw Object.assign(new Error(secret), { code: "ENOTFOUND" });
+    };
+
+    fakeDb.query = outage;
+    fakeDb.connect = outage;
+    console.error = () => undefined;
+
+    const offline = await callTool("threatintel_investigate", {
+        target: CVE,
+    });
+
+    let priorToolError = "";
+
+    try {
+        await callTool("threatintel_prior_investigation", { target: CVE });
+    } catch (error) {
+        priorToolError = String(error);
+    }
+
+    fakeDb.query = realQuery;
+    fakeDb.connect = realConnect;
+    console.error = realConsoleError;
+
+    const offlineView = assertContract(offline.text) as View & {
+        priorLookupError: string | null;
+        persistence: { persisted: boolean };
+    };
+
+    assert(
+        offlineView.mode === "refreshed" &&
+        offlineView.facts.length > 0 &&
+        offlineView.priorLookupError !== null &&
+        offlineView.persistence.persisted === false,
+        "an outage must return evidence and report both DB failures",
+    );
+    assert(
+        !offline.text.includes("projectref") &&
+        priorToolError !== "" &&
+        !priorToolError.includes("projectref"),
+        "database details must not reach the LLM",
+    );
+
+    console.log("✓ Database outage returns evidence without leaking details");
+
     /* The answer gate, through the registered hooks. */
     const afterToolCall = hooks.get("after_tool_call");
     const beforeFinalize = hooks.get("before_agent_finalize");
