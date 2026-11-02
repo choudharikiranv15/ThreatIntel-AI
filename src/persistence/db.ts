@@ -1,7 +1,49 @@
+import { readFileSync } from "node:fs";
+
 import { Pool, type PoolConfig } from "pg";
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
+/**
+ * Remote connections are encrypted by default. Certificate verification needs
+ * the provider's CA, so it is opt-in: set THREATINTEL_DB_SSL=verify-full and
+ * THREATINTEL_DB_SSL_CA to the CA file (Supabase offers it under Database
+ * settings). THREATINTEL_DB_SSL=disable turns TLS off.
+ */
+export function resolveSsl(
+    host: string,
+    env: NodeJS.ProcessEnv,
+): PoolConfig["ssl"] {
+    const mode = env.THREATINTEL_DB_SSL;
+
+    if (mode === "disable") {
+        return false;
+    }
+
+    if (mode === "verify-full") {
+        return {
+            rejectUnauthorized: true,
+            ...(env.THREATINTEL_DB_SSL_CA
+                ? { ca: readFileSync(env.THREATINTEL_DB_SSL_CA, "utf8") }
+                : {}),
+        };
+    }
+
+    if (mode === "require") {
+        return { rejectUnauthorized: false };
+    }
+
+    // Leave local connections and an explicit PGSSLMODE to pg's own handling.
+    return LOCAL_HOSTS.has(host) || env.PGSSLMODE
+        ? undefined
+        : { rejectUnauthorized: false };
+}
+
+const host = process.env.THREATINTEL_DB_HOST ?? "localhost";
+
 const poolConfig: PoolConfig = {
-    host: process.env.THREATINTEL_DB_HOST ?? "localhost",
+    host,
+    ssl: resolveSsl(host, process.env),
     port: Number(process.env.THREATINTEL_DB_PORT ?? 5432),
     database: process.env.THREATINTEL_DB_NAME ?? "threatintel",
     user: process.env.THREATINTEL_DB_USER ?? "postgres",

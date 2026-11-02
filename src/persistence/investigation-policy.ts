@@ -6,6 +6,12 @@ import type {
 
 export const DEFAULT_PRIOR_MAX_AGE_HOURS = 24;
 
+/*
+ * "Not listed" is the conclusion most likely to go out of date, and the most
+ * harmful if it does, so it gets a shorter window than the rest of a record.
+ */
+export const KEV_ABSENCE_MAX_AGE_HOURS = 6;
+
 export type PriorDecision =
     | {
         decision: "reuse";
@@ -30,6 +36,7 @@ type PriorPolicyInput = {
 type PersistedProviderResult = {
     provider: string;
     status: ProviderStatus;
+    checkedAt?: string;
 };
 
 type TimestampAge =
@@ -259,6 +266,27 @@ export function evaluatePriorInvestigation(
             "Prior investigation does not contain a completed CISA KEV check.",
             ageHours,
         );
+    }
+
+    const kevAbsence = input.providerResults.find(
+        (value): value is PersistedProviderResult =>
+            isProviderResult(value) &&
+            value.provider === "CISA_KEV" &&
+            value.status === "observed_absence",
+    );
+
+    if (kevAbsence) {
+        const kevAge = calculateAgeHours(
+            kevAbsence.checkedAt ?? input.createdAt,
+            now,
+        );
+
+        if (!kevAge.valid || kevAge.ageHours > KEV_ABSENCE_MAX_AGE_HOURS) {
+            return refreshDecision(
+                `A CISA KEV "not listed" result is only reused for ${KEV_ABSENCE_MAX_AGE_HOURS} hours.`,
+                ageHours,
+            );
+        }
     }
 
     return {

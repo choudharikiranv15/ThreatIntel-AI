@@ -3,9 +3,12 @@ import type {
   ProviderResult,
 } from "../types.js";
 
+import { requestSignal } from "./request-signal.js";
+
 export interface NvdOptions {
   apiKey?: string;
   timeoutMs: number;
+  signal?: AbortSignal;
 }
 
 interface NvdResponse {
@@ -16,12 +19,6 @@ interface NvdResponse {
   vulnerabilities?: Array<{
     cve?: Record<string, unknown>;
   }>;
-}
-
-function createTimeoutSignal(
-  timeoutMs: number,
-): AbortSignal {
-  return AbortSignal.timeout(timeoutMs);
 }
 
 function isTimeoutError(error: unknown): boolean {
@@ -111,8 +108,9 @@ export async function fetchNvdCve(
     const response = await fetch(url, {
       method: "GET",
       headers,
-      signal: createTimeoutSignal(
+      signal: requestSignal(
         options.timeoutMs,
+        options.signal,
       ),
     });
 

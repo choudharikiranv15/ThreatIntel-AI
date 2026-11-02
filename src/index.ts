@@ -145,6 +145,8 @@ const entry = defineToolPlugin({
                 config.requestTimeoutMs ?? 15000,
 
               forceRefresh: forceRefresh === true,
+
+              signal: context.signal,
             },
           );
 

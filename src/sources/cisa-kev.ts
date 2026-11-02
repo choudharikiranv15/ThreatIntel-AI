@@ -3,6 +3,8 @@ import type {
   ProviderResult,
 } from "../types.js";
 
+import { requestSignal } from "./request-signal.js";
+
 interface CisaKevEntry {
   cveID?: string;
   vendorProject?: string;
@@ -39,6 +41,7 @@ function isTimeoutError(
 export async function fetchCisaKev(
   cveId: string,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<ProviderResult> {
   const normalized =
     cveId.trim().toUpperCase();
@@ -59,7 +62,7 @@ export async function fetchCisaKev(
         },
 
         signal:
-          AbortSignal.timeout(timeoutMs),
+          requestSignal(timeoutMs, signal),
       },
     );
 

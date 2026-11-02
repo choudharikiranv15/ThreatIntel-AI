@@ -3,6 +3,7 @@
  * are faked, and fetchRedHatCve runs against a faked fetch.
  */
 import { investigateCve } from "./engine.js";
+import { resolveSsl } from "./persistence/db.js";
 import { evaluatePriorInvestigation } from "./persistence/investigation-policy.js";
 import { fetchRedHatCve } from "./sources/redhat.js";
 import { viewFromResult } from "./tool-result.js";
@@ -392,6 +393,67 @@ async function testRedHatData(): Promise<void> {
     console.log("✓ Red Hat fixes are kept and CVSS conflicts are reported");
 }
 
+function testDatabaseTls(): void {
+    const remote = "aws-0-region.pooler.supabase.com";
+    const encrypted = { rejectUnauthorized: false };
+
+    const cases: [string, NodeJS.ProcessEnv, unknown][] = [
+        [remote, {}, encrypted],
+        [remote, { THREATINTEL_DB_SSL: "require" }, encrypted],
+        [remote, { THREATINTEL_DB_SSL: "verify-full" }, { rejectUnauthorized: true }],
+        [remote, { THREATINTEL_DB_SSL: "disable" }, false],
+        [remote, { PGSSLMODE: "verify-full" }, undefined],
+        ["localhost", {}, undefined],
+        ["127.0.0.1", {}, undefined],
+    ];
+
+    for (const [host, env, expected] of cases) {
+        const actual = resolveSsl(host, env);
+
+        assert(
+            JSON.stringify(actual) === JSON.stringify(expected),
+            `${host} ${JSON.stringify(env)}: got ${JSON.stringify(actual)}`,
+        );
+    }
+
+    console.log("✓ Remote database connections use TLS by default");
+}
+
+function testKevFreshness(): void {
+    const evaluatedAt = new Date("2026-01-02T12:00:00.000Z");
+    const hoursAgo = (hours: number) =>
+        new Date(evaluatedAt.getTime() - hours * 3_600_000).toISOString();
+
+    const decide = (
+        kevStatus: "observed_absence" | "success",
+        hours: number,
+    ) =>
+        evaluatePriorInvestigation(
+            {
+                status: "confirmed",
+                createdAt: hoursAgo(hours),
+                limitations: [],
+                evidenceCount: 1,
+                evidenceRetrievedAt: [hoursAgo(hours)],
+                providerResults: [
+                    { provider: "NVD", status: "success" },
+                    {
+                        provider: "CISA_KEV",
+                        status: kevStatus,
+                        checkedAt: hoursAgo(hours),
+                    },
+                ],
+            },
+            { now: evaluatedAt },
+        ).decision;
+
+    assert(decide("observed_absence", 5) === "reuse", "recent absence reuses");
+    assert(decide("observed_absence", 7) === "refresh", "old absence refreshes");
+    assert(decide("success", 7) === "reuse", "a KEV listing keeps the full window");
+
+    console.log("✓ KEV absence uses a shorter freshness window");
+}
+
 async function main(): Promise<void> {
     await testStatus();
     await testRejected();
@@ -400,6 +462,8 @@ async function main(): Promise<void> {
     await testAffectedVersions();
     await testFactTags();
     await testRedHatData();
+    testDatabaseTls();
+    testKevFreshness();
 
     console.log("Engine accuracy tests PASSED");
 }

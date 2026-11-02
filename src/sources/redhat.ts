@@ -3,8 +3,11 @@ import type {
   ProviderResult,
 } from "../types.js";
 
+import { requestSignal } from "./request-signal.js";
+
 export interface RedHatOptions {
   timeoutMs: number;
+  signal?: AbortSignal;
 }
 
 interface RedHatCveResponse extends Record<string, unknown> {
@@ -42,8 +45,9 @@ export async function fetchRedHatCve(
         "User-Agent":
           "ThreatIntel-AI-Engine/0.3.0",
       },
-      signal: AbortSignal.timeout(
+      signal: requestSignal(
         options.timeoutMs,
+        options.signal,
       ),
     });
 

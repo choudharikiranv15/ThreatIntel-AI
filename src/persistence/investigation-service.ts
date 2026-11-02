@@ -36,6 +36,7 @@ export async function investigateWithPriorPolicy(
         nvdApiKey?: string;
         requestTimeoutMs?: number;
         forceRefresh?: boolean;
+        signal?: AbortSignal;
     } = {},
     dependencies: ServiceDependencies = defaultDependencies,
 ): Promise<InvestigationExecutionResult> {
@@ -92,8 +93,12 @@ export async function investigateWithPriorPolicy(
         {
             nvdApiKey: options.nvdApiKey,
             requestTimeoutMs: options.requestTimeoutMs ?? 15000,
+            signal: options.signal,
         },
     );
+
+    // Provider errors from an aborted call are not a result worth recording.
+    options.signal?.throwIfAborted();
 
     const persistence =
         await dependencies.persist(freshResult);

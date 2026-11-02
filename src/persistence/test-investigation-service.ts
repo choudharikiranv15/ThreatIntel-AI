@@ -356,6 +356,46 @@ async function runTests(): Promise<void> {
         console.log("✓ Prior-lookup failure degrades without leaking details");
     }
 
+    /*
+     * 8. A call aborted during the investigation is not persisted.
+     */
+    {
+        const controller = new AbortController();
+        let persistCalls = 0;
+        let aborted = false;
+
+        try {
+            await investigateWithPriorPolicy(
+                "CVE-2024-3094",
+                { forceRefresh: true, signal: controller.signal },
+                {
+                    getPrior: async () => makePrior(),
+                    investigate: async (_target, options) => {
+                        assert(
+                            options.signal === controller.signal,
+                            "signal should reach the engine",
+                        );
+
+                        controller.abort();
+
+                        return makeInvestigation();
+                    },
+                    persist: async () => {
+                        persistCalls++;
+                        return makePersistence();
+                    },
+                },
+            );
+        } catch {
+            aborted = true;
+        }
+
+        assert(aborted, "an aborted call should reject");
+        assert(persistCalls === 0, "an aborted call must not persist");
+
+        console.log("✓ Aborted investigation is not persisted");
+    }
+
     console.log("All investigation service tests PASSED.");
 }
 

@@ -39,6 +39,7 @@ import type {
 export interface InvestigationConfig {
   nvdApiKey?: string;
   requestTimeoutMs: number;
+  signal?: AbortSignal;
   providers?: Partial<InvestigationProviders>;
 }
 
@@ -1397,6 +1398,7 @@ export async function investigateCve(
             config.nvdApiKey,
           timeoutMs:
             config.requestTimeoutMs,
+          signal: config.signal,
         },
       ),
 
@@ -1406,6 +1408,7 @@ export async function investigateCve(
       fetchCisaKev(
         cveId,
         config.requestTimeoutMs,
+        config.signal,
       ),
 
     redhat: (
@@ -1416,6 +1419,7 @@ export async function investigateCve(
         {
           timeoutMs:
             config.requestTimeoutMs,
+          signal: config.signal,
         },
       ),
 
