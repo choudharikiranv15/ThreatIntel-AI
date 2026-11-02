@@ -42,6 +42,9 @@ export type ViewFact = {
     claim: string;
     evidenceId: string;
     field?: string;
+
+    /** The claim quotes text written by an external source. */
+    untrusted?: true;
 };
 
 export type InvestigationView = {
@@ -119,6 +122,9 @@ function clip(text: string, limit: number): string {
         : `${text.slice(0, limit)}... [truncated]`;
 }
 
+/* Free text that vendors and CNAs write, which can carry prompt injection. */
+const UNTRUSTED_FIELDS = new Set(["description", "statement"]);
+
 const IMPACT_ORDER: Record<string, number> = {
     affected: 0,
     unknown: 1,
@@ -193,6 +199,9 @@ function render(source: ViewSource, tier: Tier): InvestigationView {
         facts: source.facts.map((fact) => ({
             ...fact,
             claim: clip(fact.claim, tier.text),
+            ...(fact.field && UNTRUSTED_FIELDS.has(fact.field)
+                ? { untrusted: true as const }
+                : {}),
         })),
         inferences: source.inferences,
         evidence: source.evidence.map((item) => ({

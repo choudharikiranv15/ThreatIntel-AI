@@ -62,20 +62,9 @@ export async function fetchRedHatCve(
     }
 
     if (!response.ok) {
-      let body = "";
-
-      try {
-        body = await response.text();
-      } catch {
-        // Ignore response-body parsing failures.
-      }
-
-      const suffix = body
-        ? ` - ${body.slice(0, 300)}`
-        : "";
-
+      // The response body is remote text and is not forwarded to the LLM.
       throw new Error(
-        `Red Hat API request failed: HTTP ${response.status} ${response.statusText}${suffix}`,
+        `Red Hat API request failed: HTTP ${response.status} ${response.statusText}`,
       );
     }
 
