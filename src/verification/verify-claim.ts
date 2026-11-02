@@ -84,27 +84,17 @@ function hasObservedCvss(
 function getCvssFacts(
     factProvenance: EvidenceFactRecord[],
 ): EvidenceFactRecord[] {
-    return factProvenance.filter((fact) => {
-        const field = fact.field?.toLowerCase() ?? "";
-
-        return (
-            field.startsWith("cvss") ||
-            fact.claim.toLowerCase().includes("cvss")
-        );
-    });
+    return factProvenance.filter((fact) =>
+        fact.field?.toLowerCase().startsWith("cvss"),
+    );
 }
 
 function getKevFacts(
     factProvenance: EvidenceFactRecord[],
 ): EvidenceFactRecord[] {
-    return factProvenance.filter((fact) => {
-        const field = fact.field?.toLowerCase() ?? "";
-
-        return (
-            field.startsWith("kev") ||
-            fact.claim.toLowerCase().includes("cisa kev")
-        );
-    });
+    return factProvenance.filter((fact) =>
+        fact.field?.toLowerCase().startsWith("kev"),
+    );
 }
 
 export function verifyCvssClaim(

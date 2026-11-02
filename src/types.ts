@@ -49,6 +49,11 @@ export type CvssDetails = {
   baseScore: number | null;
   vector: string | null;
   severity: string | null;
+
+  /**
+   * Who assigned this score. An NVD record can carry CNA or CISA scores.
+   */
+  source?: string | null;
 };
 
 export type EvidenceFact = {

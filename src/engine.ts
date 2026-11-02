@@ -182,32 +182,40 @@ function extractCvss(
       continue;
     }
 
-    const firstMetric =
-      metricsArray[0];
-
-    if (
-      typeof firstMetric !== "object" ||
-      firstMetric === null ||
-      Array.isArray(firstMetric)
-    ) {
-      continue;
-    }
+    /*
+     * One version can hold scores from several sources (NVD, the CNA, CISA).
+     * Prefer NVD's own, and report whichever source was used.
+     */
+    const candidates =
+      metricsArray.filter(
+        (metric): metric is Record<string, unknown> =>
+          typeof metric === "object" &&
+          metric !== null &&
+          !Array.isArray(metric) &&
+          getNestedObject(
+            metric as Record<string, unknown>,
+            "cvssData",
+          ) !== undefined,
+      );
 
     const metricObject =
-      firstMetric as Record<
-        string,
-        unknown
-      >;
+      candidates.find(
+        (metric) => metric.source === "nvd@nist.gov",
+      ) ??
+      candidates.find(
+        (metric) => metric.type === "Primary",
+      ) ??
+      candidates[0];
+
+    if (!metricObject) {
+      continue;
+    }
 
     const cvssData =
       getNestedObject(
         metricObject,
         "cvssData",
-      );
-
-    if (!cvssData) {
-      continue;
-    }
+      ) as Record<string, unknown>;
 
     const version =
       getString(
@@ -247,6 +255,11 @@ function extractCvss(
       baseScore,
       vector,
       severity,
+      source:
+        getString(
+          metricObject,
+          "source",
+        ) ?? null,
     };
   }
 
@@ -354,11 +367,56 @@ function extractAffectedVersions(
   const versions = new Set<string>();
 
   /*
-   * NVD configuration trees can be deeply nested.
-   *
-   * We recursively inspect nodes and collect
-   * explicit versionStart/versionEnd fields.
+   * NVD configuration trees can be deeply nested. Only cpeMatch entries marked
+   * vulnerable count: the others describe the platform a product runs on.
+   * Each entry keeps its product, because a bare version is meaningless when
+   * one CVE spans many vendors.
    */
+  function addMatch(
+    match: Record<string, unknown>,
+  ): void {
+    const criteria = match.criteria;
+
+    if (
+      match.vulnerable !== true ||
+      typeof criteria !== "string"
+    ) {
+      return;
+    }
+
+    const [, , , vendor, product, version] =
+      criteria.split(":");
+
+    if (!vendor || !product) {
+      return;
+    }
+
+    const constraints = [
+      [">=", match.versionStartIncluding],
+      [">", match.versionStartExcluding],
+      ["<=", match.versionEndIncluding],
+      ["<", match.versionEndExcluding],
+    ]
+      .filter(([, value]) => typeof value === "string")
+      .map(([operator, value]) => `${operator} ${value}`);
+
+    if (
+      constraints.length === 0 &&
+      version &&
+      version !== "-"
+    ) {
+      constraints.push(
+        version === "*" ? "(all versions)" : version,
+      );
+    }
+
+    if (constraints.length > 0) {
+      versions.add(
+        `${vendor}:${product} ${constraints.join(", ")}`,
+      );
+    }
+  }
+
   function walk(
     value: unknown,
   ): void {
@@ -370,9 +428,7 @@ function extractAffectedVersions(
     }
 
     if (Array.isArray(value)) {
-      for (const item of value) {
-        walk(item);
-      }
+      value.forEach(walk);
 
       return;
     }
@@ -383,89 +439,24 @@ function extractAffectedVersions(
         unknown
       >;
 
-    const versionStartIncluding =
-      object.versionStartIncluding;
-
-    const versionStartExcluding =
-      object.versionStartExcluding;
-
-    const versionEndIncluding =
-      object.versionEndIncluding;
-
-    const versionEndExcluding =
-      object.versionEndExcluding;
-
-    if (
-      typeof versionStartIncluding ===
-      "string"
-    ) {
-      versions.add(
-        `>= ${versionStartIncluding}`,
-      );
+    if (object.negate === true) {
+      return;
     }
 
-    if (
-      typeof versionStartExcluding ===
-      "string"
-    ) {
-      versions.add(
-        `> ${versionStartExcluding}`,
-      );
-    }
-
-    if (
-      typeof versionEndIncluding ===
-      "string"
-    ) {
-      versions.add(
-        `<= ${versionEndIncluding}`,
-      );
-    }
-
-    if (
-      typeof versionEndExcluding ===
-      "string"
-    ) {
-      versions.add(
-        `< ${versionEndExcluding}`,
-      );
-    }
-
-    /*
-     * CPE 2.3 version field.
-     */
-    const cpeMatch =
-      object.cpe23Uri;
-
-    if (
-      typeof cpeMatch === "string"
-    ) {
-      const match =
-        cpeMatch.match(
-          /^cpe:2\.3:[^:]+:[^:]+:[^:]+:([^:]+):/,
-        );
-
-      if (match?.[1]) {
-        versions.add(
-          match[1],
-        );
+    if (Array.isArray(object.cpeMatch)) {
+      for (const match of object.cpeMatch) {
+        if (typeof match === "object" && match !== null) {
+          addMatch(match as Record<string, unknown>);
+        }
       }
+
+      return;
     }
 
-    for (
-      const child of Object.values(
-        object,
-      )
-    ) {
-      walk(child);
-    }
+    Object.values(object).forEach(walk);
   }
 
-  for (
-    const configuration of configurations
-  ) {
-    walk(configuration);
-  }
+  walk(configurations);
 
   return Array.from(versions);
 }
@@ -474,16 +465,21 @@ function extractAffectedVersions(
 /* Confirmed facts                                                            */
 /* -------------------------------------------------------------------------- */
 
+type TaggedFact = {
+  claim: string;
+  field: string;
+};
+
 function extractNvdFacts(
   cveId: string,
   evidence: Evidence,
 ): {
-  facts: string[];
+  facts: TaggedFact[];
   cvss: CvssDetails;
   cwes: string[];
   affectedVersions: string[];
 } {
-  const facts: string[] = [];
+  const facts: TaggedFact[] = [];
 
   const cvss =
     extractCvss(evidence);
@@ -496,9 +492,23 @@ function extractNvdFacts(
       evidence,
     );
 
-  facts.push(
-    `${cveId} has an authoritative NVD CVE record.`,
-  );
+  facts.push({
+    claim: `${cveId} has an authoritative NVD CVE record.`,
+    field: "nvdRecord",
+  });
+
+  const vulnStatus =
+    getString(
+      evidence.facts,
+      "vulnStatus",
+    );
+
+  if (vulnStatus) {
+    facts.push({
+      claim: `${cveId} NVD record status: ${vulnStatus}.`,
+      field: "nvdStatus",
+    });
+  }
 
   const descriptions =
     getArray(
@@ -548,9 +558,10 @@ function extractNvdFacts(
         );
 
       if (description) {
-        facts.push(
-          `${cveId} description: ${description}`,
-        );
+        facts.push({
+          claim: `${cveId} description: ${description}`,
+          field: "description",
+        });
       }
     }
   }
@@ -581,17 +592,25 @@ function extractNvdFacts(
       );
     }
 
-    if (parts.length > 0) {
-      facts.push(
-        `${cveId} NVD CVSS: ${parts.join(", ")}.`,
+    if (cvss.source) {
+      parts.push(
+        `scored by ${cvss.source}`,
       );
+    }
+
+    if (parts.length > 0) {
+      facts.push({
+        claim: `${cveId} NVD CVSS: ${parts.join(", ")}.`,
+        field: "cvss",
+      });
     }
   }
 
   if (cwes.length > 0) {
-    facts.push(
-      `${cveId} is associated with ${cwes.join(", ")} according to NVD.`,
-    );
+    facts.push({
+      claim: `${cveId} is associated with ${cwes.join(", ")} according to NVD.`,
+      field: "cwe",
+    });
   }
 
   return {
@@ -951,7 +970,7 @@ function buildInferences(
     const supportingFactIds =
       factProvenance
         .filter((fact) =>
-          fact.claim.includes("NVD CVSS")
+          fact.field === "cvss"
         )
         .map((fact) => fact.id);
 
@@ -973,6 +992,7 @@ function buildInferences(
     const supportingFactIds =
       factProvenance
         .filter((fact) =>
+          fact.field === "kev" &&
           fact.claim.includes(
             "listed in the CISA Known Exploited Vulnerabilities",
           )
@@ -1497,11 +1517,9 @@ export async function investigateCve(
       addConfirmedFact(
         confirmedFacts,
         factProvenance,
-        fact,
+        fact.claim,
         nvdEvidence.id,
-        fact.includes(" NVD CVSS:")
-          ? "cvss"
-          : undefined,
+        fact.field,
       );
     }
 
@@ -1535,6 +1553,7 @@ export async function investigateCve(
         factProvenance,
         fact,
         cisaEvidence.id,
+        "kev",
       );
     }
   }

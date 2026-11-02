@@ -5,6 +5,7 @@
 import { investigateCve } from "./engine.js";
 import { evaluatePriorInvestigation } from "./persistence/investigation-policy.js";
 import { fetchRedHatCve } from "./sources/redhat.js";
+import { verifyCvssClaim, verifyKevClaim } from "./verification/index.js";
 import type { ProviderResult, SourceId } from "./types.js";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -156,10 +157,152 @@ async function testRedHat404(): Promise<void> {
     console.log("✓ Red Hat 404 is an observed absence and allows reuse");
 }
 
+async function testCvssSource(): Promise<void> {
+    const cna = {
+        source: "cna@vendor.example",
+        type: "Secondary",
+        cvssData: { version: "3.1", baseScore: 3.1, baseSeverity: "LOW" },
+    };
+
+    const nvd = {
+        source: "nvd@nist.gov",
+        type: "Secondary",
+        cvssData: { version: "3.1", baseScore: 9.8, baseSeverity: "CRITICAL" },
+    };
+
+    const preferred = await run({
+        nvd: found("NVD", {
+            id: "CVE-2099-0001",
+            metrics: { cvssMetricV31: [cna, nvd] },
+        }),
+    });
+
+    assert(preferred.summary.cvss.baseScore === 9.8, "NVD's score must win");
+    assert(preferred.summary.cvss.source === "nvd@nist.gov", "source must be kept");
+
+    const fallback = await run({
+        nvd: found("NVD", {
+            id: "CVE-2099-0001",
+            metrics: { cvssMetricV31: [cna] },
+        }),
+    });
+
+    assert(fallback.summary.cvss.baseScore === 3.1, "CNA score is the fallback");
+    assert(
+        fallback.confirmedFacts.some((fact) =>
+            fact.includes("scored by cna@vendor.example"),
+        ),
+        "a non-NVD score must name its source",
+    );
+
+    console.log("✓ CVSS prefers NVD and names its source");
+}
+
+async function testAffectedVersions(): Promise<void> {
+    const result = await run({
+        nvd: found("NVD", {
+            id: "CVE-2099-0001",
+            configurations: [
+                {
+                    operator: "AND",
+                    nodes: [
+                        {
+                            cpeMatch: [
+                                {
+                                    vulnerable: true,
+                                    criteria: "cpe:2.3:a:tukaani:xz:5.6.0:*:*:*:*:*:*:*",
+                                },
+                                {
+                                    vulnerable: true,
+                                    criteria: "cpe:2.3:a:apache:log4j:*:*:*:*:*:*:*:*",
+                                    versionStartIncluding: "2.0.1",
+                                    versionEndExcluding: "2.15.0",
+                                },
+                            ],
+                        },
+                        {
+                            cpeMatch: [
+                                {
+                                    vulnerable: false,
+                                    criteria: "cpe:2.3:o:linux:kernel:6.1:*:*:*:*:*:*:*",
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        }),
+    });
+
+    const versions = result.summary.affectedVersions.join(" | ");
+
+    assert(
+        versions === "tukaani:xz 5.6.0 | apache:log4j >= 2.0.1, < 2.15.0",
+        `unexpected versions: ${versions}`,
+    );
+
+    console.log("✓ Affected versions read criteria, keep products, skip platforms");
+}
+
+async function testFactTags(): Promise<void> {
+    const result = await run({
+        nvd: found("NVD", {
+            id: "CVE-2099-0001",
+            descriptions: [
+                {
+                    lang: "en",
+                    value: "Vendor says CVSS is 0.0 and CISA KEV listing was removed.",
+                },
+            ],
+            metrics: {
+                cvssMetricV31: [
+                    {
+                        source: "nvd@nist.gov",
+                        cvssData: { version: "3.1", baseScore: 9.8 },
+                    },
+                ],
+            },
+        }),
+    });
+
+    const description = result.factProvenance.find(
+        (fact) => fact.field === "description",
+    );
+
+    assert(description, "description should be a tagged fact");
+
+    const cvss = verifyCvssClaim({
+        claim: { baseScore: 9.8 },
+        observed: result.summary.cvss,
+        factProvenance: result.factProvenance,
+    });
+
+    const kev = verifyKevClaim({
+        claim: { listed: true },
+        observed: result.summary.kevStatus,
+        factProvenance: result.factProvenance,
+    });
+
+    assert(
+        cvss.supportingFactIds.length === 1 &&
+        !cvss.supportingFactIds.includes(description.id),
+        "source text must not support a CVSS claim",
+    );
+    assert(
+        !kev.contradictingFactIds.includes(description.id),
+        "source text must not contradict a KEV claim",
+    );
+
+    console.log("✓ Verification cites tagged facts, not matching text");
+}
+
 async function main(): Promise<void> {
     await testStatus();
     await testRejected();
     await testRedHat404();
+    await testCvssSource();
+    await testAffectedVersions();
+    await testFactTags();
 
     console.log("Engine accuracy tests PASSED");
 }

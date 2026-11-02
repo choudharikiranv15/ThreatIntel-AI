@@ -43,9 +43,19 @@ const nvdRecord = {
     weaknesses: [
         { description: [{ lang: "en", value: "CWE-502" }] },
     ],
-    configurations: Array.from({ length: 150 }, (_, index) => ({
-        versionEndExcluding: `${index}.0.0`,
-    })),
+    configurations: [
+        {
+            nodes: [
+                {
+                    cpeMatch: Array.from({ length: 150 }, (_, index) => ({
+                        vulnerable: true,
+                        criteria: `cpe:2.3:a:vendor${index}:product:*:*:*:*:*:*:*:*`,
+                        versionEndExcluding: `${index}.0.0`,
+                    })),
+                },
+            ],
+        },
+    ],
     references: Array.from({ length: 150 }, (_, index) => ({
         url: `https://example.test/advisory/${index}/${"x".repeat(60)}`,
     })),
