@@ -393,6 +393,50 @@ async function testRedHatData(): Promise<void> {
     console.log("✓ Red Hat fixes are kept and CVSS conflicts are reported");
 }
 
+async function testPrimaryProductSurvivesCap(): Promise<void> {
+    const downstream = Array.from({ length: 300 }, (_, index) => ({
+        vulnerable: true,
+        criteria: `cpe:2.3:o:siemens:firmware_${index}:*:*:*:*:*:*:*:*`,
+        versionEndExcluding: "2.7.0",
+    }));
+
+    const result = await run({
+        nvd: found("NVD", {
+            id: "CVE-2099-0001",
+            descriptions: [
+                { lang: "en", value: "Apache Log4j2 allows remote code execution." },
+            ],
+            configurations: [
+                {
+                    nodes: [
+                        {
+                            cpeMatch: [
+                                ...downstream,
+                                {
+                                    vulnerable: true,
+                                    criteria: "cpe:2.3:a:apache:log4j:*:*:*:*:*:*:*:*",
+                                    versionEndExcluding: "2.15.0",
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        }),
+    });
+
+    const { items, total, omitted } =
+        viewFromResult(result).summary.affectedVersions;
+
+    assert(
+        items[0] === "apache:log4j < 2.15.0",
+        `the named product must come first, got ${items[0]}`,
+    );
+    assert(total === 301 && omitted === total - items.length, "counts must be exact");
+
+    console.log("✓ The CVE's own product survives the list cap");
+}
+
 function testDatabaseTls(): void {
     const remote = "aws-0-region.pooler.supabase.com";
     const encrypted = { rejectUnauthorized: false };
@@ -462,6 +506,7 @@ async function main(): Promise<void> {
     await testAffectedVersions();
     await testFactTags();
     await testRedHatData();
+    await testPrimaryProductSurvivesCap();
     testDatabaseTls();
     testKevFreshness();
 

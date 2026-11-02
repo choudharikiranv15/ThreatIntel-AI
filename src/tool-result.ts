@@ -150,6 +150,36 @@ function vendorImpactRows(
         }));
 }
 
+/*
+ * A CVE can list hundreds of downstream products. When the list is capped, the
+ * product the CVE is actually about must survive, so products named in its
+ * description come first.
+ */
+function primaryProductsFirst(
+    versions: string[],
+    facts: ViewFact[],
+): string[] {
+    const description =
+        facts
+            .find((fact) => fact.field === "description")
+            ?.claim.toLowerCase() ?? "";
+
+    const isNamed = (entry: string): boolean => {
+        const product = entry
+            .split(" ")[0]
+            .split(":")[1]
+            ?.replaceAll("_", " ")
+            .toLowerCase();
+
+        return Boolean(product) && description.includes(product);
+    };
+
+    return [
+        ...versions.filter(isNamed),
+        ...versions.filter((entry) => !isNamed(entry)),
+    ];
+}
+
 function providerRows(
     providerResults: unknown[],
     tier: Tier,
@@ -191,7 +221,10 @@ function render(source: ViewSource, tier: Tier): InvestigationView {
             conflicts: summary.conflicts ?? [],
             cwe: summary.cwe ?? [],
             affectedVersions: capped(
-                summary.affectedVersions ?? [],
+                primaryProductsFirst(
+                    summary.affectedVersions ?? [],
+                    source.facts,
+                ),
                 tier.items,
             ),
             vendorImpact: capped(
