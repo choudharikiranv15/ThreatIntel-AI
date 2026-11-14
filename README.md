@@ -297,7 +297,7 @@ Posts are saved in the shared `watch_events` outbox, in the same transaction tha
 
 ## Production
 
-The Windows gateway used for development is not a production host. For 24/7 monitoring:
+The Windows gateway used for development is not a production host. [deploy/gcp](deploy/gcp/README.md) moves it to a free Google Cloud e2-micro with scripts for setup, state migration, a systemd service, and a health ping. For 24/7 monitoring:
 
 - **Host.** Run the gateway on an always-on Linux host or VM, as a systemd service with `Restart=always` and `WantedBy=multi-user.target`, or as a container with `restart: unless-stopped`. Either one restarts it after a crash and a reboot. The first start after an install can take about two minutes.
 - **One instance.** Run a single gateway with `watchEnabled: true`. Leases make a second one safe, but it adds nothing.
