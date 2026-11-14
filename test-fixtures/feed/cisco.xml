@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+  <!-- I2R 9899 -->
+  
+    
+    <title>Cisco Security Advisory</title>
+    
+  
+   
+   
+    
+    
+    
+    <link>http://sec.cloudapps.cisco.com/security/center/psirtrss20/CiscoSecurityAdvisory.xml</link>
+    
+    <description>
+    	
+    </description>
+    <language>en-us</language>
+    <copyright>
+         1992-2010 Cisco Systems, Inc. All rights reserved.
+    </copyright>
+    <category>Cisco Security Advisory</category> 
+    <generator>
+    	Cisco Systems, Inc.
+    </generator>
+    <atom:link href="http://sec.cloudapps.cisco.com/security/center/psirtrss20/CiscoSecurityAdvisory.xml" rel="self" type="application/rss+xml" ></atom:link>
+    <ttl>15</ttl>
+
+    
+    
+	  <item>
+	  <!-- I2R 9899 -->
+          <title>Vulnerabilities in Node.js and Brotli Affecting Cisco Products: October 2026</title>
+          
+           
+            
+             
+			
+		            
+		 
+          <link>https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-oct2026-node-js-Jj3SQ19u?vs_f=Cisco%20Security%20Advisory%26vs_cat=Security%20Intelligence%26vs_type=RSS%26vs_p=Vulnerabilities%20in%20Node.js%20and%20Brotli%20Affecting%20Cisco%20Products:%20October%202026%26vs_k=1</link>
+          
+          <description>
+			
+&lt;p&gt;On October 21, 2026, Node.js announced the availability of fixes for multiple vulnerabilities across the following supported release lines: 22.x, 24.x, and 26.x.&amp;nbsp;&lt;/p&gt;
+&lt;p&gt;These vulnerabilities impact critical operations such as the Brotli decoder, DNS resolution, and TLS certificate validation. The vulnerabilities pose risks for remote code execution and traffic interception. For more information, see &lt;a href=&#034;https://nodejs.org/en/blog/vulnerability/october-2026-security-releases&#034; target=&#034;_blank&#034; rel=&#034;noopener&#034;&gt;Node.js Security Release&lt;/a&gt;.&amp;nbsp;&lt;/p&gt;
+&lt;p&gt;The following vulnerabilities have a Security Impact Rating (SIR) of High and are addressed in this advisory:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;CVE-2026-111497 - Brotli decoder out-of-bounds write; potential remote code execution&lt;/li&gt;
+&lt;li&gt;CVE-2026-105482 - DNS resolution truncation involving embedded NUL characters&lt;/li&gt;
+&lt;li&gt;CVE-2026-105483 - TLS hostname validation bypass using fullwidth IP digits&lt;/li&gt;
+&lt;li&gt;CVE-2026-106069 - TLS hostname validation bypass with noncanonical IP addresses&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;For information about Splunk products and offerings, including AppDynamics, see &lt;a href=&#034;https://advisory.splunk.com/advisories/SVD-2026-1015&#034;&gt;Vulnerabilities in Node.js (CVE-2026-111497, CVE-2026-105482, CVE-2026-105483, CVE-2026-106069) on Splunk Products - October 2026&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;This investigation was expanded to cover Brotli outside of Node.js on October 30, 2026. The Brotli decoder flaw (CVE-2026-111497), which is in the Google Brotli C decoder, is often bundled with or linked to other software, so products beyond Node.js may be affected. For software that may be affected, see&amp;nbsp;&lt;a title=&#034;https://broccoli2shell.com/&#034; href=&#034;https://broccoli2shell.com/&#034; target=&#034;_blank&#034; rel=&#034;noopener noreferrer nofollow&#034; data-outlook-id=&#034;33538e9f-dac8-44dc-a9e3-abc25ad3b5de&#034;&gt;Broccoli2Shell&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Important: &lt;/strong&gt;If a product is not listed within this advisory, Cisco&#039;s review indicates that the product is not affected by this vulnerability.&lt;/p&gt;
+&lt;p&gt;This advisory will be updated as additional information becomes available.&lt;/p&gt;
+
+&lt;p&gt;This advisory is available at the following link:&lt;br&gt;&lt;a href=&#034;https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-oct2026-node-js-Jj3SQ19u&#034;&gt;https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-oct2026-node-js-Jj3SQ19u&lt;/a&gt;&lt;/p&gt;
+			      
+		           &amp;lt;br/&amp;gt;Security Impact Rating:  High
+		    
+		    
+		        &amp;lt;br/&amp;gt;CVE: CVE-2026-105482,CVE-2026-105483,CVE-2026-106069,CVE-2026-111497
+		    
+         </description>
+          
+		  <pubDate>2026-11-13 20:41:37.0</pubDate>                   
+          <guid>https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-oct2026-node-js-Jj3SQ19u</guid>
+      </item>
+<item>
+	  <!-- I2R 9899 -->
+          <title>Cisco Informational for Emergency Distrust of eMudhra Root and Intermediate Certificate Authorities</title>
+          
+           
+            
+             
+			
+		            
+		 
+          <link>https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-emudhra-info-ScS22A1r?vs_f=Cisco%20Security%20Advisory%26vs_cat=Security%20Intelligence%26vs_type=RSS%26vs_p=Cisco%20Informational%20for%20Emergency%20Distrust%20of%20eMudhra%20Root%20and%20Intermediate%20Certificate%20Authorities%26vs_k=1</link>
+          
+          <description>
+			&lt;p&gt;Between October 17 and October 20, 2026, a critical security compromise involving Certificate Authorities that are managed by&amp;nbsp;&lt;strong&gt;eMudhra&lt;/strong&gt; was uncovered.&lt;/p&gt;
+&lt;p&gt;A security researcher demonstrated that the private keys for eight eMudhra intermediate certificates were fundamentally broken due to an unprecedented error in their Key Generation Ceremony (KGC) in April 2025. This allows anyone to brute-force acquire these private keys within seconds. For more information, see&amp;nbsp;&lt;a href=&#034;https://emudhra.we-have-a-problem.com/&#034;&gt;eMudhra Intermediate CA Compromise&lt;/a&gt; and the Cisco Talos blog post &lt;a href=&#034;https://blog.talosintelligence.com/compromised-intermediate-certificates/&#034; target=&#034;_blank&#034; rel=&#034;noopener&#034;&gt;Compromised eMudhra intermediate certificates&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;For information about Splunk products and offerings, see &lt;a href=&#034;https://advisory.splunk.com/advisories/SVD-2026-1014&#034;&gt;Compromised eMudhra Intermediate Certificate Authorities on Splunk Products - October 2026&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Important: &lt;/strong&gt;If a product is not listed within this advisory, Cisco&#039;s review indicates that the product is not affected by this vulnerability.&lt;/p&gt;
+&lt;p&gt;This advisory will be updated as additional information becomes available.&amp;nbsp;&lt;/p&gt;
+&lt;p&gt;This advisory is available at the following link:&lt;br&gt;&lt;a href=&#034;https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-emudhra-info-ScS22A1r&#034;&gt;https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-emudhra-info-ScS22A1r&lt;/a&gt;&lt;/p&gt;
+			      
+		           &amp;lt;br/&amp;gt;Security Impact Rating:  Informational
+		    
+		    
+         </description>
+          
+		  <pubDate>2026-11-13 20:01:18.0</pubDate>                   
+          <guid>https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-emudhra-info-ScS22A1r</guid>
+      </item>
+<item>
+	  <!-- I2R 9899 -->
+          <title>Cisco BroadWorks Out-of-Band Blind XML External Entity Injection Vulnerability</title>
+          
+           
+            
+             
+			
+		            
+		 
+          <link>https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-bworks-xxe-uwUd7CEt?vs_f=Cisco%20Security%20Advisory%26vs_cat=Security%20Intelligence%26vs_type=RSS%26vs_p=Cisco%20BroadWorks%20Out-of-Band%20Blind%20XML%20External%20Entity%20Injection%20Vulnerability%26vs_k=1</link>
+          
+          <description>
+			
+&lt;p&gt;A vulnerability in the Open Client Interface (OCI) XML Parser of Cisco BroadWorks could allow an unauthenticated, remote attacker to read sensitive configuration information on an affected system.&amp;nbsp;&lt;/p&gt;
+&lt;p&gt;This vulnerability exists because XML entries are improperly parsed due to external entity resolution being allowed by default. An attacker could exploit this vulnerability by sending a crafted XML message to the Open Client Interface &amp;ndash; Provisioning (OCI-P) service. A successful exploit could allow the attacker to view sensitive files from the filesystem with the privileges of the Cisco BroadWorks user.&lt;/p&gt;
+
+&lt;p&gt;Cisco has released software updates that address this vulnerability. There are no workarounds that address this vulnerability.&lt;/p&gt;
+&lt;p&gt;This advisory is available at the following link:&lt;br&gt;&lt;a href=&#034;https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-bworks-xxe-uwUd7CEt&#034; target=&#034;_blank&#034; rel=&#034;noopener&#034;&gt;https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-bworks-xxe-uwUd7CEt&lt;/a&gt;&lt;/p&gt;
+			      
+		           &amp;lt;br/&amp;gt;Security Impact Rating:  High
+		    
+		    
+		        &amp;lt;br/&amp;gt;CVE: CVE-2026-20320
+		    
+         </description>
+          
+		  <pubDate>2026-11-13 17:38:56.0</pubDate>                   
+          <guid>https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-bworks-xxe-uwUd7CEt</guid>
+      </item>
+</channel>
+</rss>

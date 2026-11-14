@@ -1,0 +1,48 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<rss xmlns:csaf="https://fortiguard.fortinet.com/rss/ns/csaf" xmlns:cvrf="https://fortiguard.fortinet.com/rss/ns/cvrf" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/" version="2.0"><channel><title>FortiGuard Labs | FortiGuard Center - IR Advisories</title><link>https://fortiguard.fortinet.com/rss/ir.xml</link><description>The following is a list of advisories for issues resolved in Fortinet products. The resolution of such issues is coordinated by the Fortinet Product Security Incident Response Team (PSIRT), a dedicated, global team that manages the receipt, investigation, and public reporting of information about security vulnerabilities and issues related to Fortinet products and services.</description><docs>http://www.rssboard.org/rss-specification</docs><generator>python-feedgen</generator><lastBuildDate>Sat, 14 Nov 2026 07:00:08 +0000</lastBuildDate><pubDate>Sat, 14 Nov 2026 07:00:08 -0800</pubDate><item><title>Node2Shell CVEs</title><link>https://fortiguard.fortinet.com/psirt/FG-IR-26-187</link><description><![CDATA[<p>
+ <strong>
+  CVSSv3 Score:
+ </strong>
+ 9.8
+</p>
+<p>
+ CVE-2026-105482 - (high)This vulnerability affects Node.js 26.x, 24.x, and 22.x.CVE-2026-105483 - (high)This vulnerability affects Node.js 26.x and 24.x.CVE-2026-106069 - (high)This vulnerability affects Node.js 26.x, 24.x, and 22.x.CVE-2026-111497 - (high)A flaw in Node.js can cause Node.js Brotli decoder out-of-bounds write permits remote code execution.This vulnerability affects Node.js 26.x, 24.x, and 22.x.CVE-2026-105481 - (medium)This vulnerability affects Node.js 26.x, 24.x, and 22.x.CVE-2026-106072 - (medium)This vulnerability affects Node.js 26.x, 24.x, and 22.x.CVE-2026-106074 - (medium)This vulnerability affects Node.js 26.x, 24.x, and 22.x.CVE-2026-106070 - (low)This vulnerability affects Node.js 26.x.CVE-2026-106071 - (low)This vulnerability affects Node.js 26.x.CVE-2026-106073 - (low)This vulnerability affects Node.js 26.x, 24.x, and 22.x.
+</p>
+<p>
+ <em>
+  Revised on 2026-11-13 00:00:00
+ </em>
+</p>
+]]></description><guid isPermaLink="true">https://fortiguard.fortinet.com/psirt/FG-IR-26-187</guid><pubDate>Mon, 26 Oct 2026 00:00:00 -0700</pubDate><csaf:link>https://filestore.fortinet.com/fortiguard/psirt/csaf_multiple-node-js-cves_fg-ir-26-187.json</csaf:link><cvrf:link>https://fortiguard.fortinet.com/psirt/cvrf/FG-IR-26-187</cvrf:link></item>
+<item><title>Numeric truncation error</title><link>https://fortiguard.fortinet.com/psirt/FG-IR-26-268</link><description><![CDATA[<p>
+ <strong>
+  CVSSv3 Score:
+ </strong>
+ 9.6
+</p>
+<p>
+ A Numeric Truncation Error vulnerability [cwe-197] in FortiOS and FortiSASE bgp daemon may allow a configured ibgp neighbor to send malicious/malformed attributes to all connected routers via a specially crafted request
+</p>
+<p>
+ <em>
+  Revised on 2026-11-13 00:00:00
+ </em>
+</p>
+]]></description><guid isPermaLink="true">https://fortiguard.fortinet.com/psirt/FG-IR-26-268</guid><pubDate>Tue, 10 Nov 2026 00:00:00 -0800</pubDate><csaf:link>https://filestore.fortinet.com/fortiguard/psirt/csaf_numeric-truncation-error_fg-ir-26-268.json</csaf:link><cvrf:link>https://fortiguard.fortinet.com/psirt/cvrf/FG-IR-26-268</cvrf:link></item>
+<item><title>SSLVPN Improper Certificate Validation</title><link>https://fortiguard.fortinet.com/psirt/FG-IR-26-193</link><description><![CDATA[<p>
+ <strong>
+  CVSSv3 Score:
+ </strong>
+ 7.7
+</p>
+<p>
+ An improper certificate validation vulnerability [CWE-295] in FortiOS SSLVPN may allow a remote and unauthenticated attacker to perform a Man-in-the-Middle attack on the communication channel between the SSLVPN web portal and the backend destination website.
+</p>
+<p>
+ <em>
+  Revised on 2026-11-12 00:00:00
+ </em>
+</p>
+]]></description><guid isPermaLink="true">https://fortiguard.fortinet.com/psirt/FG-IR-26-193</guid><pubDate>Tue, 10 Nov 2026 00:00:00 -0800</pubDate><csaf:link>https://filestore.fortinet.com/fortiguard/psirt/csaf_sslvpn-improper-certificate-validation_fg-ir-26-193.json</csaf:link><cvrf:link>https://fortiguard.fortinet.com/psirt/cvrf/FG-IR-26-193</cvrf:link></item>
+</channel>
+</rss>

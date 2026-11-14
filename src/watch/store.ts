@@ -310,7 +310,8 @@ export type NewWatchEvent = {
     | "integrity_warning"
     | "baseline_reset"
     | "monitor_failure"
-    | "monitor_recovered";
+    | "monitor_recovered"
+    | "threat_feed";
     fingerprint: string;
     field: string | null;
     scope: string | null;
@@ -333,7 +334,13 @@ export type WatchEvent = NewWatchEvent & {
     sentAt: string | null;
     messageIds: string[];
     possibleDuplicate: boolean;
+    /** watch: CVE watch alerts. feed: threat feed posts, sent to their own channel. */
+    channel: DeliveryChannel;
+    /** A feed post's rendered text; null for watch alerts, which are formatted at send time. */
+    message: string | null;
 };
+
+export type DeliveryChannel = "watch" | "feed";
 
 type EventRow = {
     id: string;
@@ -358,6 +365,8 @@ type EventRow = {
     sent_at: Date | null;
     message_ids: string[];
     possible_duplicate: boolean;
+    channel: DeliveryChannel;
+    message: string | null;
 };
 
 function toEvent(row: EventRow): WatchEvent {
@@ -384,6 +393,8 @@ function toEvent(row: EventRow): WatchEvent {
         sentAt: iso(row.sent_at),
         messageIds: row.message_ids,
         possibleDuplicate: row.possible_duplicate,
+        channel: row.channel ?? "watch",
+        message: row.message ?? null,
     };
 }
 
@@ -447,12 +458,14 @@ export async function claimDeliveries(
     owner: string,
     leaseSeconds: number,
     limit: number,
+    channels: DeliveryChannel[] = ["watch"],
 ): Promise<ClaimedEvent[]> {
     const { rows } = await db.query<EventRow & { previous_status: string }>(
         `WITH due AS (
              SELECT id, delivery_status AS previous_status
              FROM public.watch_events
              WHERE deliverable
+               AND channel = ANY($4::text[])
                AND (
                    (delivery_status = 'pending'
                     AND (next_attempt_at IS NULL OR next_attempt_at <= now()))
@@ -471,7 +484,7 @@ export async function claimDeliveries(
          FROM due
          WHERE e.id = due.id
          RETURNING e.*, due.previous_status`,
-        [owner, leaseSeconds, limit],
+        [owner, leaseSeconds, limit, channels],
     );
 
     return rows.map((row) => ({
@@ -549,12 +562,15 @@ export async function markHandedOff(
 }
 
 /** Requeues failed deliveries, for example after fixing the channel config. */
-export async function requeueFailed(target: string | null): Promise<number> {
+export async function requeueFailed(
+    target: string | null,
+    channel: DeliveryChannel = "watch",
+): Promise<number> {
     const { rowCount } = await db.query(
         `UPDATE public.watch_events
          SET delivery_status = 'pending', next_attempt_at = now(), attempts = 0
-         WHERE delivery_status = 'failed' AND ($1::text IS NULL OR target = $1)`,
-        [target],
+         WHERE delivery_status = 'failed' AND channel = $2 AND ($1::text IS NULL OR target = $1)`,
+        [target, channel],
     );
 
     return rowCount ?? 0;
@@ -566,7 +582,7 @@ export async function recentEvents(
 ): Promise<WatchEvent[]> {
     const { rows } = await db.query<EventRow>(
         `SELECT * FROM public.watch_events
-         WHERE target = $1 ORDER BY observed_at DESC LIMIT $2`,
+         WHERE target = $1 AND channel = 'watch' ORDER BY observed_at DESC LIMIT $2`,
         [target, limit],
     );
 
@@ -575,7 +591,7 @@ export async function recentEvents(
 
 export async function deliveryCounts(): Promise<Record<string, number>> {
     const { rows } = await db.query<{ delivery_status: string; count: string }>(
-        `SELECT delivery_status, count(*) FROM public.watch_events GROUP BY delivery_status`,
+        `SELECT delivery_status, count(*) FROM public.watch_events WHERE channel = 'watch' GROUP BY delivery_status`,
     );
 
     return Object.fromEntries(rows.map((row) => [row.delivery_status, Number(row.count)]));

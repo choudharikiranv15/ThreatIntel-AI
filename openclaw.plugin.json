@@ -2,7 +2,7 @@
   "id": "threatintel-ai-engine",
   "name": "ThreatIntel AI Engine",
   "description": "Evidence-first threat intelligence investigation engine. Supports CVE investigations using NVD, CISA KEV, Red Hat Security Data API, and OSV, with source correlation and comparison over time. Provides vendor-specific product impact assessments and retrieval of previously persisted investigation context.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "configSchema": {
     "type": "object",
     "properties": {
@@ -60,6 +60,115 @@
         ],
         "description": "direct: this plugin's outbox owns retries (default). openclaw_queue: OpenClaw's delivery queue owns retries once it holds an alert.",
         "default": "direct"
+      },
+      "feedEnabled": {
+        "type": "boolean",
+        "description": "Run the threat intelligence feed in the gateway. Off by default.",
+        "default": false
+      },
+      "feedNotifyTarget": {
+        "type": "string",
+        "description": "Discord target for feed posts, for example channel:123456789012345678."
+      },
+      "feedIntervalHours": {
+        "type": "integer",
+        "description": "Hours between feed collection cycles.",
+        "default": 3,
+        "minimum": 1,
+        "maximum": 24
+      },
+      "feedSources": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Enabled feed sources: cisa-kev, cisa-advisories, cisa-ics, msrc, paloalto, fortinet, cisco, aws, gcp. All by default."
+      },
+      "feedBioPharmaTerms": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Words tying an item to the Bio/Pharma industry. Built-in industry terms are used when empty."
+      },
+      "feedBioPharmaProducts": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "LIMS, laboratory, manufacturing, and OT products used in your Bio/Pharma environments."
+      },
+      "feedSecurityProducts": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Security products in scope: EDR, SIEM, firewall, VPN, IAM, PAM, email security."
+      },
+      "feedLogSources": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Log sources and platforms in scope, for example Microsoft 365, Entra ID, AWS."
+      },
+      "feedMinPriority": {
+        "anyOf": [
+          {
+            "type": "string",
+            "const": "P1"
+          },
+          {
+            "type": "string",
+            "const": "P2"
+          },
+          {
+            "type": "string",
+            "const": "P3"
+          }
+        ],
+        "description": "Lowest priority that is posted.",
+        "default": "P3"
+      },
+      "feedMaxPostsPerCycle": {
+        "type": "integer",
+        "description": "Most posts per collection cycle; higher priorities go first, the rest wait.",
+        "default": 3,
+        "minimum": 1,
+        "maximum": 20
+      },
+      "feedCooldownHours": {
+        "type": "integer",
+        "description": "Hours before an updated item may be posted again.",
+        "default": 24,
+        "minimum": 1,
+        "maximum": 168
+      },
+      "feedDedupeDays": {
+        "type": "integer",
+        "description": "Days during which a posted CVE is not posted again through another advisory.",
+        "default": 14,
+        "minimum": 1,
+        "maximum": 90
+      },
+      "feedMaxAgeDays": {
+        "type": "integer",
+        "description": "Items older than this are not posted for the first time; waiting items expire at this age.",
+        "default": 3,
+        "minimum": 1,
+        "maximum": 30
+      },
+      "feedUrgentBypass": {
+        "type": "boolean",
+        "description": "Let new P1 items with CISA-confirmed exploitation exceed the per-cycle limit.",
+        "default": true
+      },
+      "feedUrgentMaxPerCycle": {
+        "type": "integer",
+        "description": "Most urgent posts above the per-cycle limit.",
+        "default": 2,
+        "minimum": 0,
+        "maximum": 10
       }
     }
   },
@@ -75,7 +184,9 @@
       "threatintel_watch_remove",
       "threatintel_watch_list",
       "threatintel_watch_set",
-      "threatintel_watch_status"
+      "threatintel_watch_status",
+      "threatintel_feed_status",
+      "threatintel_feed_run_now"
     ]
   },
   "toolMetadata": {

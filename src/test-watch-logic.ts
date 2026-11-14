@@ -350,8 +350,10 @@ function event(overrides: Partial<WatchEvent> = {}): WatchEvent {
         sentAt: null,
         messageIds: [],
         possibleDuplicate: false,
+        channel: "watch",
+        message: null,
         ...overrides,
-    };
+    } as WatchEvent;
 }
 
 function testNotifications(): void {

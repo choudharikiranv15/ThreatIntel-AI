@@ -74,6 +74,8 @@ const KIND_TITLES: Record<WatchEvent["kind"], string> = {
     baseline_reset: "Baseline reset",
     monitor_failure: "Monitoring failure",
     monitor_recovered: "Monitoring recovered",
+    // Feed posts carry their own rendered text and never come through here.
+    threat_feed: "Threat feed",
 };
 
 export function formatNotification(events: WatchEvent[]): string {

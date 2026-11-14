@@ -65,7 +65,7 @@ function entryView(entry: store.WatchEntry) {
 /* Models tend to relabel bare timestamps with the reader's timezone. */
 const TIMES_NOTE = "All timestamps are UTC (ISO 8601). Convert them before stating a local time.";
 
-async function guarded(
+export async function guarded(
     context: WatchToolContext,
     action: string,
     run: () => Promise<unknown>,

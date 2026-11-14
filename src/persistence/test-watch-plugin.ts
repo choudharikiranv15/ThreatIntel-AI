@@ -134,6 +134,9 @@ const WATCH_TOOLS = [
     "threatintel_watch_list",
     "threatintel_watch_set",
     "threatintel_watch_status",
+    // The threat feed's tools follow the same owner-only rule.
+    "threatintel_feed_status",
+    "threatintel_feed_run_now",
 ];
 
 async function main(): Promise<void> {
@@ -170,10 +173,21 @@ async function main(): Promise<void> {
         "a refused add must not write anything",
     );
 
-    console.log("✓ All five watch tools, reads included, refuse non-owners");
+    console.log("✓ All five watch tools and both feed tools, reads included, refuse non-owners");
 
     /* Owner: add establishes a baseline through the real engine and persistence. */
     const owner = sessionTools(true);
+
+    const feedStatus = await call(owner, "threatintel_feed_status");
+
+    assert(
+        feedStatus.json.feed === "disabled in config" && /UTC/.test(feedStatus.json.times),
+        `the owner can read feed status, which reports the feed as disabled here: ${feedStatus.text}`,
+    );
+
+    const feedRun = await call(owner, "threatintel_feed_run_now");
+
+    assert(feedRun.json.status === "not_scheduled", "a disabled feed is never scheduled");
 
     const added = await call(owner, "threatintel_watch_add", { target: CVE.toLowerCase() });
 

@@ -57,7 +57,26 @@ import {
   WATCH_TOOL_DEFINITIONS,
 } from "./watch/tools.js";
 
+import { feedSettings, type FeedPluginConfig } from "./feed/runtime.js";
+import { buildFeedTools, FEED_TOOL_DEFINITIONS } from "./feed/tools.js";
+
 type WatchToolName = keyof typeof WATCH_TOOL_DEFINITIONS;
+type FeedToolName = keyof typeof FEED_TOOL_DEFINITIONS;
+
+/* Feed tools, also built per session for the trusted owner flag. */
+function feedTool(name: FeedToolName) {
+  return {
+    ...FEED_TOOL_DEFINITIONS[name],
+    factory: ({
+      config,
+      toolContext,
+    }: {
+      config: FeedPluginConfig;
+      toolContext: { senderIsOwner?: boolean; requesterSenderId?: string };
+    }) =>
+      buildFeedTools(toolContext, feedSettings(config))[name] as unknown as AnyAgentTool,
+  };
+}
 
 /* Watch tools are built per session, so each sees that session's trusted owner flag. */
 function watchTool(name: WatchToolName) {
@@ -151,6 +170,118 @@ const entry = defineToolPlugin({
           default: "direct",
         },
       ),
+    ),
+
+    feedEnabled: Type.Optional(
+      Type.Boolean({
+        description: "Run the threat intelligence feed in the gateway. Off by default.",
+        default: false,
+      }),
+    ),
+
+    feedNotifyTarget: Type.Optional(
+      Type.String({
+        description: "Discord target for feed posts, for example channel:123456789012345678.",
+      }),
+    ),
+
+    feedIntervalHours: Type.Optional(
+      Type.Integer({
+        description: "Hours between feed collection cycles.",
+        default: 3,
+        minimum: 1,
+        maximum: 24,
+      }),
+    ),
+
+    feedSources: Type.Optional(
+      Type.Array(Type.String(), {
+        description:
+          "Enabled feed sources: cisa-kev, cisa-advisories, cisa-ics, msrc, paloalto, fortinet, cisco, aws, gcp. All by default.",
+      }),
+    ),
+
+    feedBioPharmaTerms: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Words tying an item to the Bio/Pharma industry. Built-in industry terms are used when empty.",
+      }),
+    ),
+
+    feedBioPharmaProducts: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "LIMS, laboratory, manufacturing, and OT products used in your Bio/Pharma environments.",
+      }),
+    ),
+
+    feedSecurityProducts: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Security products in scope: EDR, SIEM, firewall, VPN, IAM, PAM, email security.",
+      }),
+    ),
+
+    feedLogSources: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Log sources and platforms in scope, for example Microsoft 365, Entra ID, AWS.",
+      }),
+    ),
+
+    feedMinPriority: Type.Optional(
+      Type.Union([Type.Literal("P1"), Type.Literal("P2"), Type.Literal("P3")], {
+        description: "Lowest priority that is posted.",
+        default: "P3",
+      }),
+    ),
+
+    feedMaxPostsPerCycle: Type.Optional(
+      Type.Integer({
+        description: "Most posts per collection cycle; higher priorities go first, the rest wait.",
+        default: 3,
+        minimum: 1,
+        maximum: 20,
+      }),
+    ),
+
+    feedCooldownHours: Type.Optional(
+      Type.Integer({
+        description: "Hours before an updated item may be posted again.",
+        default: 24,
+        minimum: 1,
+        maximum: 168,
+      }),
+    ),
+
+    feedDedupeDays: Type.Optional(
+      Type.Integer({
+        description: "Days during which a posted CVE is not posted again through another advisory.",
+        default: 14,
+        minimum: 1,
+        maximum: 90,
+      }),
+    ),
+
+    feedMaxAgeDays: Type.Optional(
+      Type.Integer({
+        description: "Items older than this are not posted for the first time; waiting items expire at this age.",
+        default: 3,
+        minimum: 1,
+        maximum: 30,
+      }),
+    ),
+
+    feedUrgentBypass: Type.Optional(
+      Type.Boolean({
+        description: "Let new P1 items with CISA-confirmed exploitation exceed the per-cycle limit.",
+        default: true,
+      }),
+    ),
+
+    feedUrgentMaxPerCycle: Type.Optional(
+      Type.Integer({
+        description: "Most urgent posts above the per-cycle limit.",
+        default: 2,
+        minimum: 0,
+        maximum: 10,
+      }),
     ),
   }),
 
@@ -493,6 +624,14 @@ const entry = defineToolPlugin({
     tool(watchTool("list")),
     tool(watchTool("set")),
     tool(watchTool("status")),
+
+    /*
+     * ------------------------------------------------------------
+     * Threat feed, owner only
+     * ------------------------------------------------------------
+     */
+    tool(feedTool("status")),
+    tool(feedTool("runNow")),
   ],
 });
 
@@ -507,7 +646,7 @@ entry.register = (api) => {
   api.registerService(
     createPluginWatchService(
       api,
-      (api.pluginConfig ?? {}) as WatchPluginConfig,
+      (api.pluginConfig ?? {}) as WatchPluginConfig & FeedPluginConfig,
     ),
   );
 };

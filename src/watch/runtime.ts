@@ -1,5 +1,6 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
 
+import { createFeedHooks, type FeedPluginConfig } from "../feed/runtime.js";
 import { persistInvestigation } from "../persistence/persist-investigation.js";
 import {
     createDirectDeliverer,
@@ -83,14 +84,16 @@ export function buildDeliverer(
         : createDirectDeliverer(getConfig, settings.notifyTarget);
 }
 
+/** One service for watch checks, the threat feed, and delivery of both: no second scheduler. */
 export function createPluginWatchService(
     api: Pick<OpenClawPluginApi, "config">,
-    config: WatchPluginConfig,
+    config: WatchPluginConfig & FeedPluginConfig,
 ) {
     return createWatchService(
         watchSettings(config),
         () => buildDeliverer(api, config),
         { owner: OWNER },
+        createFeedHooks(api, config),
     );
 }
 

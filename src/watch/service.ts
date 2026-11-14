@@ -65,9 +65,21 @@ export type WatchRuntime = {
     owner: string;
     check: CheckDependencies;
     deliverer: Deliverer | null;
+    /** Sends threat feed posts to the feed channel. */
+    feedDeliverer?: Deliverer | null;
     pauseMs?: number;
     log?: (message: string) => void;
 };
+
+/** The threat feed's part of the shared service loop. */
+export type FeedHooks = {
+    enabled: boolean;
+    buildDeliverer: () => Deliverer | null;
+    /** Runs a collection cycle if one is due; leases make this safe on every tick. */
+    runIfDue: (owner: string, log: (message: string) => void) => Promise<unknown>;
+};
+
+const POSSIBLE_REPEAT_NOTE = "\n-# This post may repeat an earlier one: the previous send was interrupted.";
 
 /** Runs a claimed check and records it, including monitoring's own health. */
 export async function checkAndRecord(
@@ -148,7 +160,15 @@ export async function runDueChecks(runtime: WatchRuntime): Promise<number> {
 export async function deliverPending(runtime: WatchRuntime): Promise<{ sent: number; failed: number; handedOff: number }> {
     const counts = { sent: 0, failed: 0, handedOff: 0 };
 
-    if (!runtime.deliverer) {
+    const deliverers: Record<store.DeliveryChannel, Deliverer | null> = {
+        watch: runtime.deliverer,
+        feed: runtime.feedDeliverer ?? null,
+    };
+
+    // Only claim what can be sent now, so nothing sits leased without a sender.
+    const channels = (Object.keys(deliverers) as store.DeliveryChannel[]).filter((channel) => deliverers[channel]);
+
+    if (channels.length === 0) {
         return counts;
     }
 
@@ -156,6 +176,7 @@ export async function deliverPending(runtime: WatchRuntime): Promise<{ sent: num
         runtime.owner,
         DELIVERY_LEASE_SECONDS,
         DELIVERIES_PER_TICK,
+        channels,
     );
 
     const groups = new Map<string, store.ClaimedEvent[]>();
@@ -166,7 +187,18 @@ export async function deliverPending(runtime: WatchRuntime): Promise<{ sent: num
 
     for (const events of groups.values()) {
         const ids = events.map((event) => event.id);
-        const result = await runtime.deliverer(formatNotification(events));
+        const first = events[0];
+        const deliver = deliverers[first.channel];
+
+        if (!deliver) {
+            continue;
+        }
+
+        const text = first.channel === "feed"
+            ? `${first.message ?? ""}${events.some((event) => event.possibleDuplicate) ? POSSIBLE_REPEAT_NOTE : ""}`
+            : formatNotification(events);
+
+        const result = await deliver(text);
 
         if (result.status === "sent") {
             await store.markSent(ids, runtime.owner, result.messageIds);
@@ -198,6 +230,7 @@ export function createWatchService(
     settings: WatchSettings,
     buildDeliverer: () => Deliverer | null,
     overrides: Partial<Pick<WatchRuntime, "check" | "owner">> = {},
+    feed: FeedHooks | null = null,
 ): WatchService {
     let timer: ReturnType<typeof setInterval> | null = null;
     let firstRun: ReturnType<typeof setTimeout> | null = null;
@@ -213,7 +246,8 @@ export function createWatchService(
             persistInvestigation,
             store.insertEvents,
         ),
-        deliverer: settings.notifyTarget ? buildDeliverer() : null,
+        deliverer: settings.enabled && settings.notifyTarget ? buildDeliverer() : null,
+        feedDeliverer: feed?.enabled ? feed.buildDeliverer() : null,
         log,
     });
 
@@ -226,10 +260,20 @@ export function createWatchService(
         running = (async () => {
             const current = runtime();
 
-            try {
-                await runDueChecks(current);
-            } catch (error) {
-                log(`watch: check cycle failed: ${String(error)}`);
+            if (settings.enabled) {
+                try {
+                    await runDueChecks(current);
+                } catch (error) {
+                    log(`watch: check cycle failed: ${String(error)}`);
+                }
+            }
+
+            if (feed?.enabled) {
+                try {
+                    await feed.runIfDue(owner, log);
+                } catch (error) {
+                    log(`threat feed: cycle failed: ${String(error)}`);
+                }
             }
 
             try {
@@ -250,12 +294,14 @@ export function createWatchService(
         async start(ctx) {
             log = (message) => ctx.logger?.info(message);
 
-            if (!settings.enabled) {
-                ctx.logger?.info("threatintel watch: monitoring disabled by config");
+            if (!settings.enabled && !feed?.enabled) {
+                ctx.logger?.info("threatintel watch: monitoring and threat feed disabled by config");
                 return;
             }
 
-            if (!settings.notifyTarget) {
+            if (!settings.enabled) {
+                ctx.logger?.info("threatintel watch: monitoring disabled by config; threat feed enabled");
+            } else if (!settings.notifyTarget) {
                 ctx.logger?.warn("threatintel watch: no watchNotifyTarget set; changes are saved but not sent");
             }
 

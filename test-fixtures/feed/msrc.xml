@@ -1,0 +1,50 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<rss
+  version="2.0">
+  <channel>
+    <title>MSRC Security Update Guide</title>
+    <link>https://msrc.microsoft.com/update-guide/</link>
+    <description />
+    <lastBuildDate>Fri, 13 Nov 2026 22:46:06 Z</lastBuildDate>
+    <item
+      Revision="1.0000000000">
+      <guid
+        isPermaLink="false">CVE-2026-125342</guid>
+      <link>https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-125342</link>
+      <category>CVE</category>
+      <title>Chromium CVE-2026-125342: Uninitialized resource</title>
+      <description>This CVE was assigned by Chrome. Microsoft Edge (Chromium-based) ingests Chromium, which addresses this vulnerability. Please see [Google Chrome Releases](https://chromereleases.googleblog.com/2026) for more information.</description>
+      <pubDate>Fri, 13 Nov 2026 08:00:00 -0800</pubDate>
+    </item>
+<item
+      Revision="1.0000000000">
+      <guid
+        isPermaLink="false">CVE-2026-125344</guid>
+      <link>https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-125344</link>
+      <category>CVE</category>
+      <title>Chromium CVE-2026-125344: Type confusion</title>
+      <description>This CVE was assigned by Chrome. Microsoft Edge (Chromium-based) ingests Chromium, which addresses this vulnerability. Please see [Google Chrome Releases](https://chromereleases.googleblog.com/2026) for more information.</description>
+      <pubDate>Fri, 13 Nov 2026 08:00:00 -0800</pubDate>
+    </item>
+<item
+      Revision="1.1000000000">
+      <guid
+        isPermaLink="false">CVE-2026-94522</guid>
+      <link>https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-94522</link>
+      <category>CVE</category>
+      <title>CVE-2026-94522 Windows Kernel Transaction Manager Elevation of Privilege Vulnerability</title>
+      <description>Updated an acknowledgement. This is an informational change only.</description>
+      <pubDate>Fri, 13 Nov 2026 08:00:00 -0800</pubDate>
+    </item>
+<item
+      Revision="1.1000000000">
+      <guid
+        isPermaLink="false">CVE-2026-95922</guid>
+      <link>https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-95922</link>
+      <category>CVE</category>
+      <title>CVE-2026-95922 Windows Graphics Kernel Elevation of Privilege Vulnerability</title>
+      <description>Added Microsoft Office software to the Security Updates table.  Customers that are running supported version of Microsoft Office are encouraged to update to the indicated version to be protected from this vulnerability.</description>
+      <pubDate>Fri, 13 Nov 2026 08:00:00 -0800</pubDate>
+    </item>
+</channel>
+</rss>

@@ -1,4 +1,4 @@
-# ThreatIntel AI Engine v0.5
+# ThreatIntel AI Engine v0.6
 
 A CVE investigation engine for ThreatIntel AI. Retrieves authoritative evidence from external intelligence sources and structures it for LLM-assisted SOC analysis.
 
@@ -18,6 +18,7 @@ Given a CVE identifier, the engine:
 - Produces conservative analytical inferences with explicit supporting fact references
 - Returns explicit limitations when a source is unavailable or returns no data
 - Watches selected CVEs on a schedule and posts a Discord alert when their intelligence changes
+- Posts a prioritised threat intelligence feed for hunting, every 3 hours, without flooding the channel
 
 It deliberately does **not** invent MITRE ATT&CK mappings, detection claims, or facts not present in retrieved evidence.
 
@@ -82,7 +83,9 @@ For a new database, apply `db/schema.sql`, then every file in `db/migrations/` i
 
 **Apply `db/migrations/002_watchlist.sql` before using the watchlist in v0.5.** It only adds the `watchlist` and `watch_events` tables, so investigations keep working without it.
 
-Migrations 001 and 002 also enable row-level security with no policies. That blocks Supabase's `anon` and `authenticated` Data API roles, while the table owner the plugin connects as keeps access.
+**Apply `db/migrations/003_threat_feed.sql` before deploying v0.6.** It adds the feed tables and a `channel` column to `watch_events`, which v0.6 reads for watch alerts too, so until it is applied watch alert delivery and status fail as well as the feed. Investigations are unaffected.
+
+Migrations 001, 002, and 003 also enable row-level security with no policies. That blocks Supabase's `anon` and `authenticated` Data API roles, while the table owner the plugin connects as keeps access.
 
 Remote connections use TLS by default, without verifying the server certificate. To verify it, set `THREATINTEL_DB_SSL=verify-full` and `THREATINTEL_DB_SSL_CA` to the path of your provider's CA file. `THREATINTEL_DB_SSL=disable` turns TLS off.
 
@@ -217,6 +220,80 @@ Due checks and pending alerts live in PostgreSQL, not in memory. A gateway resta
 Checks and deliveries are claimed with database leases that expire (15 minutes for a check, 2 minutes for a delivery). Two gateways pointed at one database never run the same check or send the same alert. A lease left by a crashed gateway is picked up after it expires.
 
 Monitoring makes at most ten checks per cycle, two seconds apart, with longer source retries than interactive use. The CISA KEV catalog is downloaded at most once an hour and shared across checks, and its `checkedAt` is the download time.
+
+## Threat feed
+
+Every 3 hours, the feed collects new advisories, rates each one against your scope, and posts only the ones worth hunting to a Discord channel. A cycle with nothing worth posting posts nothing. It runs inside the watchlist's background service, so there is one scheduler, one lease system, and one delivery outbox.
+
+### Sources
+
+| Id | Source | Notes |
+|---|---|---|
+| `cisa-kev` | CISA Known Exploited Vulnerabilities | Recent additions. The only source of `confirmed` exploitation. |
+| `cisa-advisories` | CISA advisories | Includes joint advisories, whose indicator sections are extracted. KEV announcements are skipped in favour of the catalog. |
+| `cisa-ics` | CISA ICS advisories | Deployment sectors are kept. |
+| `msrc` | Microsoft Security Update Guide | First publications only; revisions are mostly informational. |
+| `paloalto`, `fortinet`, `cisco` | Vendor PSIRT feeds | |
+| `aws`, `gcp` | Cloud security bulletins | |
+
+All sources are public and need no credentials. Each is fetched on its own with retries for timeouts, 429, and 5xx. One failing source never blocks the others, and a cycle where every source fails is recorded as failed, not as an empty success. A page that answers 200 but is not a feed, such as a bot check, counts as a failure.
+
+### Priority
+
+The rules are fixed and every item records the reasons it got its priority. A model never decides what is posted.
+
+| Priority | When |
+|---|---|
+| P1 | Bio/Pharma relevance with exploitation or high/critical severity; or CISA-confirmed exploitation of an in-scope product, log source, or manufacturing OT system |
+| P2 | An in-scope security product with exploitation or high/critical severity; Bio/Pharma relevance at lower severity; reported exploitation of manufacturing OT |
+| P3 | An in-scope log source or platform with exploitation or high/critical severity; or CISA-confirmed exploitation of anything else |
+| ignore | Everything else |
+
+- **Bio/Pharma relevance** needs an industry term (pharmaceutical, biotech, LIMS, clinical trial, GxP, and similar) or one of your configured Bio/Pharma products. "Healthcare" alone never qualifies, and neither does CISA listing Healthcare and Public Health among an ICS product's sectors, since many vendors list nearly every sector.
+- **Exploitation:** `confirmed` means CISA KEV lists the CVE. `reported` means the source itself says it has been exploited. Denials win, so "not known to be actively exploited" is never read as exploitation, and "an attacker could exploit" describes capability, not an attack. A bulletin bundling more than 10 third-party CVEs is not treated as confirmed exploitation of its product because one of them is in KEV.
+- Terms match whole words or phrases, case-insensitive.
+
+### Indicators
+
+Indicators are taken only from a source's own "Indicators of Compromise" section, never from the rest of a page, where example domains, references, and version numbers look like indicators. Values are kept exactly as published, including defanging such as `hxxp` and `[.]`, and are posted in code spans so Discord does not link them. Domains are taken only when defanged, because a plain domain in an indicator section may be a reference. Without an indicator section, the post says `No IOCs published in the source.` Vendor advisories rarely publish indicators; research articles do, and are planned for phase 6B.
+
+### Flood control
+
+- One advisory has one key across feeds, so CISA's two feeds never post it twice.
+- A CVE posted within `feedDedupeDays` is not posted again through another advisory, unless the new one adds higher exploitation or indicators where the earlier post had none, or covers CVEs that were not posted.
+- A posted item is posted again, marked `(updated)`, only after a material change: exploitation rose, or new indicators. Updates wait out `feedCooldownHours`, except newly confirmed P1 exploitation.
+- At most `feedMaxPostsPerCycle` posts per cycle, P1 first, then by exploitation, severity, and recency. The rest wait for later cycles until they are older than `feedMaxAgeDays`.
+- New P1 items with confirmed exploitation may exceed the limit, up to `feedUrgentMaxPerCycle`, when `feedUrgentBypass` is on.
+
+### Configuration
+
+Set these under `plugins.entries.threatintel-ai-engine.config`. Lists are JSON arrays, for example `openclaw config set plugins.entries.threatintel-ai-engine.config.feedSecurityProducts '["FortiGate","CrowdStrike Falcon"]'`.
+
+| Field | Default | Meaning |
+|---|---|---|
+| `feedEnabled` | `false` | Runs the feed. |
+| `feedNotifyTarget` | none | The feed channel, for example `channel:<id>`. |
+| `feedIntervalHours` | `3` | Hours between cycles (1 to 24). |
+| `feedSources` | all | Enabled source ids from the table above. |
+| `feedBioPharmaTerms` | built-in industry terms | Replaces the built-in terms when set. |
+| `feedBioPharmaProducts` | empty | LIMS, laboratory, manufacturing, and OT products in your Bio/Pharma environments. |
+| `feedSecurityProducts` | empty | Security products in scope. |
+| `feedLogSources` | empty | Log sources and platforms in scope. |
+| `feedMinPriority` | `P3` | Lowest priority posted. |
+| `feedMaxPostsPerCycle` | `3` | Posts per cycle (1 to 20). |
+| `feedCooldownHours` | `24` | Wait before posting an update to a posted item. |
+| `feedDedupeDays` | `14` | How long a posted CVE suppresses other advisories about it. |
+| `feedMaxAgeDays` | `3` | Older items are not posted for the first time, and waiting items expire. |
+| `feedUrgentBypass` | `true` | Let confirmed P1 exploitation exceed the limit. |
+| `feedUrgentMaxPerCycle` | `2` | Most urgent posts above the limit. |
+
+With the product and log-source lists empty, only Bio/Pharma items, exploited manufacturing OT, and CISA-confirmed exploitation are posted.
+
+### Operations
+
+`threatintel_feed_status` (owner only) shows the last and next cycle, each recent run's counts (discovered, filtered, duplicates suppressed, selected, deferred) and duration, each source's outcome, recent posts with delivery state and message ids, and can re-queue failed posts. `threatintel_feed_run_now` makes the next cycle due immediately. Operational detail stays in these tools and the gateway log, never in the channel.
+
+Posts are saved in the shared `watch_events` outbox, in the same transaction that marks their item posted, so a restart never loses a post or posts an item twice. Delivery, retries, and the at-least-once caveat are the watchlist's: a crash after Discord accepts a post but before the result is saved re-sends it, with a note that it may repeat. Apply `db/migrations/003_threat_feed.sql` before enabling the feed.
 
 ## Production
 
