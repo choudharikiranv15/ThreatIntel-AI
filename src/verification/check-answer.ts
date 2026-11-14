@@ -1,4 +1,6 @@
 import type { InvestigationView } from "../tool-result.js";
+import { vendorRowsFor, type ProductRow } from "./evidence-cache.js";
+import { checkProductClaims } from "./product-claims.js";
 import { verifyCvssClaim, verifyKevClaim } from "./verify-claim.js";
 
 /*
@@ -243,6 +245,26 @@ function checkSegment(
 
     checkAgreementClaim(segment, view, findings);
     checkVendorClaim(segment, view, findings);
+
+    // Product claims are checked against every row when the full rows are
+    // available, and otherwise against the rows the tool result showed.
+    const cached = vendorRowsFor(view.target);
+
+    const rows: ProductRow[] = cached ?? view.summary.vendorImpact.items.map((item) => ({
+        productName: item.product,
+        packageName: item.package,
+        status: item.status as ProductRow["status"],
+        cpe: null,
+    }));
+
+    for (const finding of checkProductClaims(
+        view.target,
+        segment,
+        view.summary.vendorImpact.total === 0 ? [] : rows,
+        cached !== undefined || view.summary.vendorImpact.omitted === 0,
+    )) {
+        findings.add(finding);
+    }
 
     const listed = kevClaim(segment);
 

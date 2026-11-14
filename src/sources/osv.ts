@@ -4,11 +4,12 @@ import type {
 } from "../types.js";
 import { ENGINE_VERSION } from "../version.js";
 
-import { requestSignal } from "./request-signal.js";
+import { fetchWithRetry, type RetryPolicy } from "./request-signal.js";
 
 export interface OsvOptions {
   timeoutMs: number;
   signal?: AbortSignal;
+  retry?: RetryPolicy;
 }
 
 interface OsvRecord {
@@ -47,7 +48,7 @@ async function getRecord(
   id: string,
   options: OsvOptions,
 ): Promise<OsvRecord | null> {
-  const response = await fetch(
+  const response = await fetchWithRetry(
     `${API_URL}/${encodeURIComponent(id)}`,
     {
       method: "GET",
@@ -55,7 +56,11 @@ async function getRecord(
         Accept: "application/json",
         "User-Agent": `ThreatIntel-AI-Engine/${ENGINE_VERSION}`,
       },
-      signal: requestSignal(options.timeoutMs, options.signal),
+    },
+    {
+      timeoutMs: options.timeoutMs,
+      signal: options.signal,
+      retry: options.retry,
     },
   );
 

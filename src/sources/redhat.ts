@@ -4,11 +4,12 @@ import type {
 } from "../types.js";
 import { ENGINE_VERSION } from "../version.js";
 
-import { requestSignal } from "./request-signal.js";
+import { fetchWithRetry, type RetryPolicy } from "./request-signal.js";
 
 export interface RedHatOptions {
   timeoutMs: number;
   signal?: AbortSignal;
+  retry?: RetryPolicy;
 }
 
 interface RedHatCveResponse extends Record<string, unknown> {
@@ -39,18 +40,22 @@ export async function fetchRedHatCve(
     `https://access.redhat.com/hydra/rest/securitydata/cve/${encodeURIComponent(normalized)}.json`;
 
   try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        "User-Agent":
-          `ThreatIntel-AI-Engine/${ENGINE_VERSION}`,
+    const response = await fetchWithRetry(
+      url,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          "User-Agent":
+            `ThreatIntel-AI-Engine/${ENGINE_VERSION}`,
+        },
       },
-      signal: requestSignal(
-        options.timeoutMs,
-        options.signal,
-      ),
-    });
+      {
+        timeoutMs: options.timeoutMs,
+        signal: options.signal,
+        retry: options.retry,
+      },
+    );
 
     /*
      * Red Hat answers 404 for CVEs it does not track. The check completed,

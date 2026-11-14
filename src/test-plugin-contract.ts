@@ -249,9 +249,14 @@ const hooks = new Map<string, (event: Row, context: Row) => unknown>();
 entry.register({
     pluginConfig: {},
     logger: { warn: () => undefined },
-    registerTool: (tool: RegisteredTool) => {
-        tools.set(tool.name, tool);
+    // Watch tools are session-scoped factories; they have their own test.
+    registerTool: (tool: RegisteredTool | (() => unknown)) => {
+        if (typeof tool !== "function") {
+            tools.set(tool.name, tool);
+        }
     },
+    // The watch service stays idle here: monitoring is off by default.
+    registerService: () => undefined,
     on: (name: string, handler: (event: Row, context: Row) => unknown) => {
         hooks.set(name, handler);
     },

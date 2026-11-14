@@ -4,12 +4,13 @@ import type {
 } from "../types.js";
 import { ENGINE_VERSION } from "../version.js";
 
-import { requestSignal } from "./request-signal.js";
+import { fetchWithRetry, type RetryPolicy } from "./request-signal.js";
 
 export interface NvdOptions {
   apiKey?: string;
   timeoutMs: number;
   signal?: AbortSignal;
+  retry?: RetryPolicy;
 }
 
 interface NvdResponse {
@@ -106,14 +107,15 @@ export async function fetchNvdCve(
         options.apiKey.trim();
     }
 
-    const response = await fetch(url, {
-      method: "GET",
-      headers,
-      signal: requestSignal(
-        options.timeoutMs,
-        options.signal,
-      ),
-    });
+    const response = await fetchWithRetry(
+      url,
+      { method: "GET", headers },
+      {
+        timeoutMs: options.timeoutMs,
+        signal: options.signal,
+        retry: options.retry,
+      },
+    );
 
     if (!response.ok) {
       // The response body is remote text and is not forwarded to the LLM.

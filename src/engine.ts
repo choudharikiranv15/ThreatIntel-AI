@@ -8,7 +8,12 @@ import {
 
 import {
   fetchCisaKev,
+  type KevCatalogSnapshot,
 } from "./sources/cisa-kev.js";
+
+import type {
+  RetryPolicy,
+} from "./sources/request-signal.js";
 
 import {
   fetchRedHatCve,
@@ -53,6 +58,12 @@ export interface InvestigationConfig {
   requestTimeoutMs: number;
   signal?: AbortSignal;
   providers?: Partial<InvestigationProviders>;
+
+  /** Retries for transient provider failures. Defaults to one quick retry. */
+  retry?: RetryPolicy;
+
+  /** A shared KEV catalog, so many lookups can reuse one download. */
+  kevCatalog?: () => Promise<KevCatalogSnapshot>;
 }
 
 export function verifyInvestigationCvssClaim(
@@ -1403,6 +1414,7 @@ export async function investigateCve(
           timeoutMs:
             config.requestTimeoutMs,
           signal: config.signal,
+          retry: config.retry,
         },
       ),
 
@@ -1413,6 +1425,10 @@ export async function investigateCve(
         cveId,
         config.requestTimeoutMs,
         config.signal,
+        {
+          retry: config.retry,
+          catalog: config.kevCatalog,
+        },
       ),
 
     redhat: (
@@ -1424,6 +1440,7 @@ export async function investigateCve(
           timeoutMs:
             config.requestTimeoutMs,
           signal: config.signal,
+          retry: config.retry,
         },
       ),
 
@@ -1437,6 +1454,7 @@ export async function investigateCve(
             timeoutMs:
               config.requestTimeoutMs,
             signal: config.signal,
+            retry: config.retry,
           },
         ),
 

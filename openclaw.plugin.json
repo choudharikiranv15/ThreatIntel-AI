@@ -2,7 +2,7 @@
   "id": "threatintel-ai-engine",
   "name": "ThreatIntel AI Engine",
   "description": "Evidence-first threat intelligence investigation engine. Supports CVE investigations using NVD, CISA KEV, Red Hat Security Data API, and OSV, with source correlation and comparison over time. Provides vendor-specific product impact assessments and retrieval of previously persisted investigation context.",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "configSchema": {
     "type": "object",
     "properties": {
@@ -16,6 +16,50 @@
         "default": 15000,
         "minimum": 1000,
         "maximum": 60000
+      },
+      "watchEnabled": {
+        "type": "boolean",
+        "description": "Run scheduled watchlist monitoring in the gateway. Off by default.",
+        "default": false
+      },
+      "watchNotifyTarget": {
+        "type": "string",
+        "description": "Discord target for watch alerts, for example channel:123456789012345678. Without it, changes are saved but not sent."
+      },
+      "watchTickMinutes": {
+        "type": "integer",
+        "description": "How often the monitor looks for due checks and pending alerts.",
+        "default": 5,
+        "minimum": 1,
+        "maximum": 60
+      },
+      "watchDefaultIntervalHours": {
+        "type": "integer",
+        "description": "Default hours between checks of a watched CVE.",
+        "default": 24,
+        "minimum": 6,
+        "maximum": 168
+      },
+      "watchMaxEntries": {
+        "type": "integer",
+        "description": "Most CVEs the watchlist may hold.",
+        "default": 100,
+        "minimum": 1,
+        "maximum": 500
+      },
+      "watchDeliveryMode": {
+        "anyOf": [
+          {
+            "type": "string",
+            "const": "direct"
+          },
+          {
+            "type": "string",
+            "const": "openclaw_queue"
+          }
+        ],
+        "description": "direct: this plugin's outbox owns retries (default). openclaw_queue: OpenClaw's delivery queue owns retries once it holds an alert.",
+        "default": "direct"
       }
     }
   },
@@ -26,7 +70,12 @@
     "tools": [
       "threatintel_investigate",
       "threatintel_compare_investigations",
-      "threatintel_prior_investigation"
+      "threatintel_prior_investigation",
+      "threatintel_watch_add",
+      "threatintel_watch_remove",
+      "threatintel_watch_list",
+      "threatintel_watch_set",
+      "threatintel_watch_status"
     ]
   },
   "toolMetadata": {

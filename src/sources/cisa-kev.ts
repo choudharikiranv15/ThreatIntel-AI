@@ -4,7 +4,7 @@ import type {
 } from "../types.js";
 import { ENGINE_VERSION } from "../version.js";
 
-import { requestSignal } from "./request-signal.js";
+import { fetchWithRetry, type RetryPolicy } from "./request-signal.js";
 
 interface CisaKevEntry {
   cveID?: string;
@@ -19,7 +19,7 @@ interface CisaKevEntry {
   notes?: string;
 }
 
-interface CisaKevCatalog {
+export interface CisaKevCatalog {
   title?: string;
   catalogVersion?: string;
   dateReleased?: string;
@@ -39,56 +39,107 @@ function isTimeoutError(
   );
 }
 
+export type KevCatalogSnapshot = {
+  catalog: CisaKevCatalog;
+  /** When this copy of the catalog was downloaded. */
+  fetchedAt: string;
+};
+
+export async function fetchKevCatalog(
+  timeoutMs: number,
+  signal?: AbortSignal,
+  retry?: RetryPolicy,
+): Promise<KevCatalogSnapshot> {
+  const fetchedAt = new Date().toISOString();
+
+  const response = await fetchWithRetry(
+    KEV_URL,
+    {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "User-Agent": `ThreatIntel-AI-Engine/${ENGINE_VERSION}`,
+      },
+    },
+    { timeoutMs, signal, retry },
+  );
+
+  if (!response.ok) {
+    // The response body is remote text and is not forwarded to the LLM.
+    throw new Error(
+      `CISA KEV request failed: HTTP ${response.status} ${response.statusText}`,
+    );
+  }
+
+  const catalog = (await response.json()) as CisaKevCatalog;
+
+  if (!Array.isArray(catalog.vulnerabilities)) {
+    throw new Error(
+      "CISA KEV response did not contain a vulnerabilities array.",
+    );
+  }
+
+  return { catalog, fetchedAt };
+}
+
+/**
+ * Shares one catalog download across lookups until it expires, so monitoring
+ * many CVEs does not download about 1.5 MB per CVE. A failed download is not
+ * cached, so the next lookup tries again.
+ */
+export function createKevCatalogCache(
+  load: () => Promise<KevCatalogSnapshot>,
+  ttlMs: number,
+): () => Promise<KevCatalogSnapshot> {
+  let cached: { snapshot: KevCatalogSnapshot; expiresAt: number } | null = null;
+  let pending: Promise<KevCatalogSnapshot> | null = null;
+
+  return () => {
+    if (cached && Date.now() < cached.expiresAt) {
+      return Promise.resolve(cached.snapshot);
+    }
+
+    pending ??= load()
+      .then((snapshot) => {
+        cached = { snapshot, expiresAt: Date.now() + ttlMs };
+        return snapshot;
+      })
+      .finally(() => {
+        pending = null;
+      });
+
+    return pending;
+  };
+}
+
 export async function fetchCisaKev(
   cveId: string,
   timeoutMs: number,
   signal?: AbortSignal,
+  options: {
+    retry?: RetryPolicy;
+    catalog?: () => Promise<KevCatalogSnapshot>;
+  } = {},
 ): Promise<ProviderResult> {
   const normalized =
     cveId.trim().toUpperCase();
 
-  const checkedAt =
+  let checkedAt =
     new Date().toISOString();
 
   try {
-    const response = await fetch(
-      KEV_URL,
-      {
-        method: "GET",
+    const snapshot = await (
+      options.catalog ??
+      (() => fetchKevCatalog(timeoutMs, signal, options.retry))
+    )();
 
-        headers: {
-          Accept: "application/json",
-          "User-Agent":
-            `ThreatIntel-AI-Engine/${ENGINE_VERSION}`,
-        },
+    const { catalog } = snapshot;
 
-        signal:
-          requestSignal(timeoutMs, signal),
-      },
-    );
-
-    if (!response.ok) {
-      // The response body is remote text and is not forwarded to the LLM.
-      throw new Error(
-        `CISA KEV request failed: HTTP ${response.status} ${response.statusText}`,
-      );
-    }
-
-    const catalog =
-      (await response.json()) as CisaKevCatalog;
-
-    if (
-      !Array.isArray(
-        catalog.vulnerabilities,
-      )
-    ) {
-      throw new Error(
-        "CISA KEV response did not contain a vulnerabilities array.",
-      );
-    }
+    // A shared catalog is reported as of its download, not as of this lookup.
+    checkedAt = snapshot.fetchedAt;
 
     const entry =
-      catalog.vulnerabilities.find(
+      (catalog.vulnerabilities ?? []).find(
         (item) =>
           typeof item.cveID === "string" &&
           item.cveID.toUpperCase() === normalized,
