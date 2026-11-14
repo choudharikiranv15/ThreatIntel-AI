@@ -82,17 +82,44 @@ function phrasesFor(productName: string): Phrase[] {
     return phrases;
 }
 
+/*
+ * Ways an answer says a product is NOT affected. The subject between "no" or
+ * "none of" and the verb must be plain words, so a comma or clause break
+ * ("no known exploitation, and RHEL 9 is affected") never reads as a denial.
+ */
+const NEGATED_AFFECTED = [
+    /\bnot\s+(?:currently\s+|known\s+to\s+be\s+)?(?:affected|vulnerable)\b/g,
+    /\bunaffected\b/g,
+    /\b(?:isn't|aren't|wasn't|weren't)\s+(?:currently\s+)?(?:affected|vulnerable)\b/g,
+    /\bno(?:\s+[\w.+-]+){1,8}?\s+(?:is|are|was|were|has\s+been|have\s+been)\s+(?:affected|vulnerable)\b/g,
+    /\bnone\s+of(?:\s+[\w.+-]+){1,8}?\s+(?:is|are|was|were|has\s+been|have\s+been)\s+(?:affected|vulnerable)\b/g,
+];
+
+/* A negation shortly before "affected" that none of the patterns explain: too unclear to judge. */
+// Same clause only: the words between may be separated by spaces, not by commas or other breaks.
+const UNCLEAR_NEGATION = /\b(?:no|not|none|never|neither|nor|without)\b(?:\s+[\w.+-]+){0,6}?\s+(?:affected|vulnerable)\b/;
+
 function claimedStatus(segment: string): ClaimedStatus | "mixed" | null {
     const lower = segment.toLowerCase();
     const claims = new Set<ClaimedStatus>();
 
-    if (/\b(?:not\s+affected|unaffected|not\s+vulnerable)\b/.test(lower)) {
-        claims.add("not_affected");
+    let withoutNegated = lower;
+
+    for (const pattern of NEGATED_AFFECTED) {
+        if (pattern.test(withoutNegated)) {
+            claims.add("not_affected");
+        }
+
+        pattern.lastIndex = 0;
+        withoutNegated = withoutNegated.replace(pattern, " ");
     }
 
-    const withoutNegated = lower.replace(/\b(?:not\s+affected|unaffected|not\s+vulnerable)\b/g, " ");
-
     if (/\b(?:affected|vulnerable)\b/.test(withoutNegated)) {
+        if (UNCLEAR_NEGATION.test(withoutNegated)) {
+            // "Not only RHEL 8 is affected…": a guess either way could be wrong.
+            return null;
+        }
+
         claims.add("affected");
     }
 

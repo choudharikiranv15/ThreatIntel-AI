@@ -445,6 +445,40 @@ function testProductClaims(): void {
     );
 
     assert(check("RHEL 8 is fixed but RHEL 9 is affected.").length === 0, "a sentence mixing statuses is skipped, not guessed");
+
+    /* Negated phrasings: the CVE-2024-3094 live false warning, and its relatives. */
+    const xzRows: ProductRow[] = [6, 7, 8, 9, 10].map((major) => ({
+        productName: `Red Hat Enterprise Linux ${major}`,
+        packageName: "xz",
+        status: "not_affected",
+        cpe: null,
+    }));
+
+    for (const sentence of [
+        "No RHEL versions are affected.",
+        "Red Hat states packages are only present in Fedora 41 and Fedora Rawhide within the Red Hat ecosystem. No RHEL versions are affected.",
+        "None of the RHEL releases are affected.",
+        "RHEL 9 is not affected.",
+        "RHEL 9 isn't affected.",
+        "RHEL 9 is not currently vulnerable.",
+        "No supported Red Hat Enterprise Linux 9 packages have been affected.",
+    ]) {
+        assert(
+            check(sentence, xzRows).length === 0,
+            `a correct "not affected" statement must not be flagged: ${sentence} -> ${JSON.stringify(check(sentence, xzRows))}`,
+        );
+    }
+
+    /* Denials must still be checked against the evidence: RHEL 9 is affected in ROWS. */
+    assert(check("No RHEL 9 packages are affected.").length === 1, "a false denial is still caught");
+    assert(check("RHEL 9 is not affected.").length === 1, "a false 'not affected' is still caught");
+
+    /* A real false claim with an unrelated negation elsewhere is still caught. */
+    assert(check("RHEL 8 is affected; no fix is available yet.").length === 1, "a negation after the claim does not hide it");
+    assert(check("There is no known exploitation, and RHEL 8 is affected.").length === 1, "a negation in another clause does not hide it");
+
+    /* Unclear negation is skipped, not guessed. */
+    assert(check("Not only RHEL 8 is affected.").length === 0, "an unclear negation is not judged");
     assert(check("Several distributions are affected.").length === 0, "a sentence naming no product is not judged");
 
     /* Everyday words inside product names must not be read as product mentions. */
@@ -537,6 +571,56 @@ async function testProductClaimsThroughGate(): Promise<void> {
     assert(
         checkAnswer(`${target}: the claim that OpenShift Container Platform 3.11 is affected is incorrect.`, [view]).length === 0,
         "correcting a wrong product claim must not be flagged",
+    );
+
+    clearVendorRows();
+
+    /*
+     * The live CVE-2024-3094 false warning. Red Hat lists every product
+     * not_affected; the answer said "No RHEL versions are affected." and was
+     * wrongly flagged as claiming RHEL is affected.
+     */
+    const xz = "CVE-2024-3094";
+    const xzInvestigation = await investigateCve(xz, {
+        requestTimeoutMs: 1000,
+        providers: {
+            nvd: async () => ({ provider: "NVD", status: "success", error: null, checkedAt: now, evidence: { id: `NVD:${xz}`, source: "NVD", sourceType: "primary", retrievedAt: now, url: "https://e.test", title: "t", confidence: "high", facts: { id: xz }, extractedFacts: [], references: [] } }),
+            cisaKev: async () => ({ provider: "CISA_KEV", status: "observed_absence", error: null, checkedAt: now, evidence: null }),
+            redhat: async () => ({
+                provider: "REDHAT",
+                status: "success",
+                error: null,
+                checkedAt: now,
+                evidence: {
+                    id: `REDHAT:${xz}`, source: "REDHAT", sourceType: "vendor", retrievedAt: now, url: "https://e.test", title: "t", confidence: "high", extractedFacts: [], references: [],
+                    facts: {
+                        name: xz,
+                        package_state: [
+                            ...[10, 6, 7, 8, 9].map((major) => ({ product_name: `Red Hat Enterprise Linux ${major}`, package_name: "xz", fix_state: "Not affected" })),
+                            { product_name: "Red Hat JBoss Enterprise Application Platform 8", package_name: "xz", fix_state: "Not affected" },
+                        ],
+                    },
+                },
+            }),
+        },
+    });
+
+    const xzView = viewFromResult(xzInvestigation);
+
+    rememberVendorRows(xz, xzInvestigation.summary.vendorImpact);
+
+    const liveAnswer = [
+        `${xz} Investigation`,
+        "| Red Hat Enterprise Linux 9 | xz | not_affected |",
+        "Note: Red Hat states packages are only present in Fedora 41 and Fedora Rawhide within the Red Hat ecosystem. No RHEL versions are affected.",
+    ].join("\n");
+
+    const productFindings = checkAnswer(liveAnswer, [xzView]).filter((finding) => finding.includes("Red Hat lists"));
+
+    assert(productFindings.length === 0, `the live answer must not be flagged: ${JSON.stringify(productFindings)}`);
+    assert(
+        checkAnswer(`${xz}: RHEL 9 is affected.`, [xzView]).some((finding) => finding.includes("Red Hat lists not_affected")),
+        "a real false claim about the same CVE is still caught",
     );
 
     clearVendorRows();
