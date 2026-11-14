@@ -78,6 +78,40 @@ Then, in Discord:
 
 Reboot once to prove recovery: `sudo reboot`, wait two minutes, and ask the bot something.
 
+## Hard spending cap (optional)
+
+Budgets in Google Cloud only send alerts. [budget-cap](budget-cap/main.py) turns one into a hard stop: the budget publishes its spend to a Pub/Sub topic, and the function unlinks billing from the project once spend reaches the budget, which stops the VM and every other paid service in the project. Relink billing in the console to resume. Budget data lags by hours, so spend can pass the cap slightly before it acts. If billing stays off, Google may eventually delete the VM's disk; the watchlist and feed state are in Supabase, and these scripts rebuild the VM.
+
+Setup, with `$p` your project id and `$budget` the budget's full name from `gcloud billing budgets list`:
+
+```powershell
+gcloud services enable pubsub.googleapis.com run.googleapis.com cloudfunctions.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com eventarc.googleapis.com cloudresourcemanager.googleapis.com iam.googleapis.com billingbudgets.googleapis.com --project=$p
+gcloud pubsub topics create budget-cap --project=$p
+
+# The function's identity may only unlink billing from this project.
+gcloud iam service-accounts create budget-cap --project=$p
+gcloud projects add-iam-policy-binding $p --member="serviceAccount:budget-cap@$p.iam.gserviceaccount.com" --role=roles/billing.projectManager --condition=None
+gcloud projects add-iam-policy-binding $p --member="serviceAccount:budget-cap@$p.iam.gserviceaccount.com" --role=roles/serviceusage.serviceUsageConsumer --condition=None
+gcloud projects add-iam-policy-binding $p --member="serviceAccount:budget-cap@$p.iam.gserviceaccount.com" --role=roles/run.invoker --condition=None
+
+# A separate build identity, so the VM's default account gains nothing.
+gcloud iam service-accounts create budget-cap-build --project=$p
+gcloud projects add-iam-policy-binding $p --member="serviceAccount:budget-cap-build@$p.iam.gserviceaccount.com" --role=roles/cloudbuild.builds.builder --condition=None
+
+gcloud functions deploy budget-cap --gen2 --region=us-central1 --runtime=python312 --source=deploy/gcp/budget-cap --entry-point=stop_billing --trigger-topic=budget-cap --service-account=budget-cap@$p.iam.gserviceaccount.com --trigger-service-account=budget-cap@$p.iam.gserviceaccount.com --build-service-account=projects/$p/serviceAccounts/budget-cap-build@$p.iam.gserviceaccount.com --set-env-vars=TARGET_PROJECT_ID=$p --memory=256Mi --max-instances=1 --project=$p
+
+gcloud billing budgets update $budget --notifications-rule-pubsub-topic=projects/$p/topics/budget-cap --billing-project=$p
+```
+
+Test it without shutting anything down: a message with `"dryRun": true` is evaluated and logged but never acted on.
+
+```powershell
+gcloud pubsub topics publish budget-cap --project=$p --message='{\"costAmount\":150,\"budgetAmount\":100,\"currencyCode\":\"INR\",\"dryRun\":true}'
+gcloud functions logs read budget-cap --gen2 --region=us-central1 --project=$p --limit=5
+```
+
+The log should say `DRY RUN: spend 150.0 reached budget 100.0; would disable billing`.
+
 ## Everyday operations
 
 | Task | Command (on the VM) |
