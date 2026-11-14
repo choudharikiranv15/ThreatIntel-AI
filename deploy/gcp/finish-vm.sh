@@ -29,8 +29,23 @@ chmod 700 "$STATE"
 chmod 600 "$STATE/.env" "$STATE/openclaw.json"
 
 step "Pointing Windows paths at this machine"
-openclaw config set agents.defaults.workspace "$STATE/workspace"
-openclaw config set plugins.load.paths "[\"$REPO_DIR\"]" --strict-json
+# Edited directly: 'openclaw config set' validates the whole file first, and
+# the Windows plugin path alone makes it invalid, so it would refuse.
+node -e '
+const fs = require("fs");
+const [file, workspace, repo] = process.argv.slice(1);
+const config = JSON.parse(fs.readFileSync(file, "utf8"));
+config.agents ??= {};
+config.agents.defaults ??= {};
+config.agents.defaults.workspace = workspace;
+config.plugins ??= {};
+config.plugins.load ??= {};
+config.plugins.load.paths = [repo];
+fs.writeFileSync(file, JSON.stringify(config, null, 2) + "\n");
+console.log("workspace ->", workspace);
+console.log("plugin path ->", repo);
+' "$STATE/openclaw.json" "$STATE/workspace" "$REPO_DIR"
+openclaw config validate
 
 step "Repairing plugins (reinstalls the Discord plugin for Linux)"
 openclaw doctor --fix --non-interactive
