@@ -54,11 +54,17 @@ export function threatName(item: Pick<EvaluatedItem, "title" | "cves">): string 
     return item.cves[0] ?? "Unnamed advisory";
 }
 
-export function formatFeedPost(item: EvaluatedItem, options: { updated?: boolean } = {}): string {
-    const heading = `### ${sanitize(threatName(item), 180)}${options.updated ? " (updated)" : ""}`;
+/*
+ * Discord groups consecutive messages from one sender under a single name, so
+ * separate posts can read as one. The divider marks where each post starts.
+ */
+export const POST_DIVIDER = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
 
+export function formatFeedPost(item: EvaluatedItem, options: { updated?: boolean } = {}): string {
     const head = [
-        heading,
+        POST_DIVIDER,
+        "**Threat Name:**",
+        `${sanitize(threatName(item), 180)}${options.updated ? " (updated)" : ""}`,
         "",
         "**Affected Tools / Products:**",
         list(item.products),

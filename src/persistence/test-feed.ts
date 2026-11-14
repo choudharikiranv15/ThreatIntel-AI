@@ -124,7 +124,7 @@ async function testFirstCycleAndDedupe(): Promise<void> {
 
     const [post] = await posts();
 
-    assert(post && post.message.startsWith("### ") && post.message.includes("**IOCs to Hunt:**"), "the post is saved, already formatted, before any send");
+    assert(post && post.message.includes("**Threat Name:**") && post.message.includes("**IOCs to Hunt:**"), "the post is saved, already formatted, before any send");
     assert(post.delivery_status === "pending", "it waits in the outbox for delivery");
 
     const { rows: [item] } = await db.query("SELECT * FROM public.feed_items WHERE item_key = $1", [post.target]);

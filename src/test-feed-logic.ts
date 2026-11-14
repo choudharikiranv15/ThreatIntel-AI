@@ -8,7 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { BUNDLE_LIMIT, evaluate, type ScopeConfig } from "./feed/classify.js";
-import { formatFeedPost, NO_IOCS } from "./feed/format.js";
+import { formatFeedPost, NO_IOCS, POST_DIVIDER } from "./feed/format.js";
 import { extractIocs } from "./feed/iocs.js";
 import { parseFeed } from "./feed/rss.js";
 import {
@@ -436,13 +436,17 @@ function testFormat(): void {
     const post = formatFeedPost(item);
     const lines = post.split("\n");
 
-    assert(lines[0] === "### CVE-2026-0325 PAN-OS: GlobalProtect Bypass", `the heading is the threat name: ${lines[0]}`);
+    assert(lines[0] === POST_DIVIDER, "each post starts with a divider, so grouped Discord messages stay apart");
+    assert(
+        lines[1] === "**Threat Name:**" && lines[2] === "CVE-2026-0325 PAN-OS: GlobalProtect Bypass",
+        `the threat name has its own heading: ${lines.slice(1, 3)}`,
+    );
 
     const headings = lines.filter((line) => line.startsWith("**"));
 
     assert(
-        JSON.stringify(headings) === JSON.stringify(["**Affected Tools / Products:**", "**Affected Platforms:**", "**Article:**", "**IOCs to Hunt:**"]),
-        `exactly the four sections, in order: ${headings}`,
+        JSON.stringify(headings) === JSON.stringify(["**Threat Name:**", "**Affected Tools / Products:**", "**Affected Platforms:**", "**Article:**", "**IOCs to Hunt:**"]),
+        `exactly the five sections, in order: ${headings}`,
     );
     assert(post.includes("<https://security.paloaltonetworks.com/CVE-2026-0325>"), "the original link is kept");
     assert(!/summary|remediation|recommend/i.test(post), "no summaries or remediation text");
@@ -467,7 +471,7 @@ function testFormat(): void {
 
     const gcp = formatFeedPost(evaluated({ title: "GCP-2026-079", cves: ["CVE-2026-1", "CVE-2026-2"] }));
 
-    assert(gcp.startsWith("### GCP-2026-079: CVE-2026-1, CVE-2026-2"), "a bare bulletin id is named by its CVEs");
+    assert(gcp.split("\n")[2] === "GCP-2026-079: CVE-2026-1, CVE-2026-2", "a bare bulletin id is named by its CVEs");
 
     console.log("✓ Posts follow the required format exactly and are safe against hostile source text");
 }
