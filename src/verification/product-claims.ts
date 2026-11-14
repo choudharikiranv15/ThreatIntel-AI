@@ -26,14 +26,6 @@ const BRAND_WORDS = new Set([
     "openstack",
 ]);
 
-/* Words that name a product family too loosely to identify one product. */
-const GENERIC_WORDS = new Set([
-    "red", "hat", "enterprise", "linux", "platform", "for", "on", "the", "and",
-    "update", "updates", "services", "service", "support", "extended",
-    "advanced", "server", "client", "workstation", "solutions", "telco", "sap",
-    "lifecycle", "els", "eus", "aus", "tus", "e4s", "rhel", "of", "with",
-]);
-
 function normalize(text: string): string {
     return text
         .toLowerCase()

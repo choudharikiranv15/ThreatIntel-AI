@@ -1,5 +1,4 @@
 import type {
-    Evidence,
     ProviderResult,
     SourceId,
 } from "./types.js";

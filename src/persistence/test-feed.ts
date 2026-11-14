@@ -98,12 +98,6 @@ async function posts(): Promise<Array<{ target: string; message: string; deliver
     return rows;
 }
 
-async function itemState(key: string): Promise<string | undefined> {
-    const { rows } = await db.query<{ state: string }>("SELECT state FROM public.feed_items WHERE item_key = $1", [key]);
-
-    return rows[0]?.state;
-}
-
 /* ------------------------------------------------------------------------- */
 
 async function testFirstCycleAndDedupe(): Promise<void> {

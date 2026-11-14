@@ -4,7 +4,6 @@ import {
 
 import type {
   ProviderResult,
-  VendorImpactAssessment,
 } from "../types.js";
 
 const CVE_3094 =

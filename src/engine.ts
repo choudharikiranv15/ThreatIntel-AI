@@ -140,14 +140,6 @@ function getArray(
     : undefined;
 }
 
-function errorMessage(
-  error: unknown,
-): string {
-  return error instanceof Error
-    ? error.message
-    : String(error);
-}
-
 function assignEvidenceId(
   cveId: string,
   evidence: Evidence,
@@ -877,7 +869,6 @@ function normalizeRedHatFixState(
 }
 
 function extractRedHatVendorImpact(
-  cveId: string,
   evidence: Evidence,
 ): VendorImpactAssessment[] {
   const assessments: VendorImpactAssessment[] = [];
@@ -1815,7 +1806,6 @@ export async function investigateCve(
   const vendorImpact =
     redhatEvidence
       ? extractRedHatVendorImpact(
-        cveId,
         redhatEvidence,
       )
       : [];

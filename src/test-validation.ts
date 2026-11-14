@@ -4,7 +4,6 @@ import {
 
 import type {
     Evidence,
-    InvestigationResult,
     ProviderResult,
 } from "./types.js";
 
@@ -37,29 +36,6 @@ function makeEvidence(
         facts: {},
         extractedFacts: [],
         references: [],
-    };
-}
-
-function validNvdResult(): ProviderResult {
-    return {
-        provider: "NVD",
-        status: "success",
-        evidence: makeEvidence("NVD"),
-        error: null,
-        checkedAt:
-            new Date().toISOString(),
-    };
-}
-
-function validCisaResult(): ProviderResult {
-    return {
-        provider: "CISA_KEV",
-        status: "success",
-        evidence:
-            makeEvidence("CISA_KEV"),
-        error: null,
-        checkedAt:
-            new Date().toISOString(),
     };
 }
 
