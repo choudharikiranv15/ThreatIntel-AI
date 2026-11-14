@@ -1,118 +1,174 @@
-# ThreatIntel AI Engine v0.6
+# ThreatIntel AI
 
-A CVE investigation engine for ThreatIntel AI. Retrieves authoritative evidence from external intelligence sources and structures it for LLM-assisted SOC analysis.
+An evidence-first threat intelligence plugin for [OpenClaw](https://github.com/openclaw/openclaw). It gives a Discord bot three capabilities for a SOC:
 
-## What it does
+- **CVE investigation.** Retrieves NVD, CISA KEV, Red Hat, and OSV evidence, compares the sources, and returns facts that each trace back to retrieved evidence.
+- **CVE watchlist.** Re-investigates chosen CVEs on a schedule and alerts a Discord channel when their intelligence actually changes.
+- **Threat feed.** Every 3 hours, collects advisories from CISA and major vendors, prioritises them for a Bio/Pharma SOC, and posts only what is worth hunting.
 
-Given a CVE identifier, the engine:
+The model is the reasoning layer, never the source of truth. Every fact comes from a retrieved source, a deterministic check compares the model's answer with that evidence before it is sent, and nothing is invented: no MITRE ATT&CK mappings, detection claims, or indicators that a source did not publish.
 
-- Retrieves the NVD CVE record (CVSS, CWE, affected configurations, references)
-- Checks CISA Known Exploited Vulnerabilities (KEV) catalog status
-- Retrieves Red Hat vendor impact, including shipped fixes
-- Retrieves ecosystem package fixes from reviewed OSV advisories
-- Compares sources and classifies each disagreement, without choosing a winner
-- Builds an assessment in which each statement cites its facts, provider checks, or evidence
-- Compares investigations over time, separating real changes from outages and engine changes
-- Validates every provider response against a strict contract before accepting it
-- Generates human-readable confirmed facts backed by traceable evidence
-- Produces conservative analytical inferences with explicit supporting fact references
-- Returns explicit limitations when a source is unavailable or returns no data
-- Watches selected CVEs on a schedule and posts a Discord alert when their intelligence changes
-- Posts a prioritised threat intelligence feed for hunting, every 3 hours, without flooding the channel
+**Version 0.6.** Pinned to OpenClaw 2026.7.1-2.
 
-It deliberately does **not** invent MITRE ATT&CK mappings, detection claims, or facts not present in retrieved evidence.
+## Contents
 
-## Build
+- [How it works](#how-it-works)
+- [Tools](#tools)
+- [Getting started](#getting-started)
+- [Configuration](#configuration)
+- [CVE investigation](#cve-investigation)
+- [Answer checking](#answer-checking)
+- [Watchlist](#watchlist)
+- [Threat feed](#threat-feed)
+- [Deployment](#deployment)
+- [Testing and CI](#testing-and-ci)
+- [Project layout](#project-layout)
+- [Design rules](#design-rules)
 
-```powershell
-npm install
-npm run build
+## How it works
+
+```mermaid
+flowchart LR
+    U[Discord user] --> G[OpenClaw gateway + model]
+    G -->|tool calls| E[Investigation engine]
+    E --> S[(NVD, CISA KEV,<br/>Red Hat, OSV)]
+    E --> DB[(PostgreSQL / Supabase)]
+    G -->|final answer| A[Answer gate] --> U
+    W[Background service] -->|due checks| E
+    W -->|every 3 h| F[Threat feed sources]
+    W --> DB
+    W -->|alerts and posts| D[Discord channels]
 ```
 
-## Validate
+- The **gateway** runs the model and this plugin's tools. Investigations are saved to PostgreSQL with hashed evidence, and reused while fresh.
+- The **answer gate** compares each final answer with that session's evidence and asks for a revision, or adds a visible warning, when they disagree.
+- One **background service** runs watchlist checks, threat feed cycles, and delivery of both. Its schedule, locks, and outbox live in PostgreSQL, so a restart or reboot resumes where it stopped.
 
-```powershell
+## Tools
+
+| Tool | Who | Purpose |
+|---|---|---|
+| `threatintel_investigate` | Everyone | Investigate a CVE, reusing a fresh saved investigation or querying the sources. |
+| `threatintel_prior_investigation` | Everyone | Retrieve the latest saved investigation of a CVE. |
+| `threatintel_compare_investigations` | Everyone | Compare the two most recent investigations of a CVE. |
+| `threatintel_watch_add` | Owner | Watch a CVE. Records a baseline immediately. |
+| `threatintel_watch_remove` | Owner | Stop watching. Past alerts are kept. |
+| `threatintel_watch_list` | Owner | Watched CVEs with their last result, last error, and next check. |
+| `threatintel_watch_set` | Owner | Change a CVE's interval (6 to 168 hours) or pause it. |
+| `threatintel_watch_status` | Owner | Delivery counts, recent alerts with message IDs; can re-queue failed alerts. |
+| `threatintel_feed_status` | Owner | Last and next feed cycle, per-run counts, source outcomes, recent posts. |
+| `threatintel_feed_run_now` | Owner | Make the next feed cycle due immediately. |
+
+"Owner" means a sender listed in OpenClaw's `commands.ownerAllowFrom`. The flag comes from OpenClaw, never from the model's arguments, so a prompt cannot grant itself access. Everyone else gets `owner_only`, including for the read-only tools.
+
+## Getting started
+
+### Prerequisites
+
+- Node.js 24.15 or later
+- OpenClaw 2026.7.1-2, with a Discord channel configured
+- PostgreSQL 17, or a Supabase project
+
+### 1. Build
+
+```bash
+npm ci
+npm run build
 npm run validate
 ```
 
-## Tests
+### 2. Database
 
-```powershell
-# Build, then run everything that needs no network or database
-npm test
+For a new database, apply `db/schema.sql`, then every file in `db/migrations/` in order. For an existing one, including Supabase, apply only the migrations you have not run yet, with the Supabase SQL editor or `psql`.
 
-# Needs PostgreSQL with the schema and migrations applied
-npm run test:database
+| Migration | Adds | Required from |
+|---|---|---|
+| `001_evidence_integrity.sql` | Evidence hashes, replay support | v0.3. Without it, investigations are not saved. |
+| `002_watchlist.sql` | `watchlist`, `watch_events` | v0.5, to use the watchlist |
+| `003_threat_feed.sql` | Feed tables; a `channel` column on `watch_events` | v0.6. Without it, watch alerts fail as well as the feed. |
 
-# Calls the live NVD, CISA, Red Hat, and OSV APIs
-npm run test:live
-```
+Each migration runs in one transaction and enables row-level security with no policies, which blocks Supabase's `anon` and `authenticated` Data API roles while the table owner the plugin connects as keeps access.
 
-`npm test` includes an OpenClaw delivery contract test. It fails if the installed OpenClaw is not the pinned 2026.7.1-2, or if OpenClaw's delivery stops honouring `skipQueue`, which the watchlist relies on to avoid duplicate alerts. Run it before upgrading OpenClaw.
+The plugin connects with these environment variables. On a systemd host, put them in `~/.openclaw/.env`, which the gateway loads.
 
-CI runs `npm test` and `npm run test:database` against a real PostgreSQL service on every push and pull request.
+| Variable | Notes |
+|---|---|
+| `THREATINTEL_DB_HOST`, `THREATINTEL_DB_PORT`, `THREATINTEL_DB_NAME`, `THREATINTEL_DB_USER`, `THREATINTEL_DB_PASSWORD` | Required |
+| `THREATINTEL_DB_SSL` | Remote connections use TLS by default without verifying the certificate. `verify-full` verifies it; `disable` turns TLS off. |
+| `THREATINTEL_DB_SSL_CA` | Path to your provider's CA file, for `verify-full` |
 
-The primary regression case is `CVE-2024-3094`. Expected outcome: `confirmed` status, CVSS 10 CRITICAL, KEV `not-listed`.
+### 3. Install into OpenClaw
 
-## Install into OpenClaw
-
-```powershell
+```bash
 openclaw plugins install --link .
 openclaw plugins enable threatintel-ai-engine
+
+# The answer gate reads the model's final answer, which needs conversation access.
+openclaw config set plugins.entries.threatintel-ai-engine.hooks.allowConversationAccess true
+
+# Owner-only tools refuse everyone until an owner is set.
+openclaw config set commands.ownerAllowFrom '["discord:<your-discord-user-id>"]'
+
 openclaw gateway restart
-```
-
-Then verify:
-
-```powershell
 openclaw plugins inspect threatintel-ai-engine --runtime --json
 ```
 
-The answer gate reads the model's final answer, so OpenClaw only runs it after you allow conversation access for this plugin:
+### 4. Turn on the watchlist and feed (optional)
 
-```powershell
-openclaw config set plugins.entries.threatintel-ai-engine.hooks.allowConversationAccess true
+```bash
+C=plugins.entries.threatintel-ai-engine.config
+openclaw config set $C.watchEnabled true
+openclaw config set $C.watchNotifyTarget "channel:<alerts-channel-id>"
+openclaw config set $C.feedEnabled true
+openclaw config set $C.feedNotifyTarget "channel:<feed-channel-id>"
 openclaw gateway restart
 ```
 
-## Database
+## Configuration
 
-For a new database, apply `db/schema.sql`, then every file in `db/migrations/` in order. For an existing database, including Supabase, apply only the migrations you have not run yet, using the Supabase SQL editor or `psql`.
+All settings live under `plugins.entries.threatintel-ai-engine.config`. Lists are JSON arrays, for example `openclaw config set $C.feedSecurityProducts '["FortiGate","CrowdStrike Falcon"]'`. Restart the gateway after a change.
 
-**Apply `db/migrations/001_evidence_integrity.sql` before deploying v0.3.** Until then, saving investigations fails, and tool results report `persisted: false`.
+### General
 
-**Apply `db/migrations/002_watchlist.sql` before using the watchlist in v0.5.** It only adds the `watchlist` and `watch_events` tables, so investigations keep working without it.
-
-**Apply `db/migrations/003_threat_feed.sql` before deploying v0.6.** It adds the feed tables and a `channel` column to `watch_events`, which v0.6 reads for watch alerts too, so until it is applied watch alert delivery and status fail as well as the feed. Investigations are unaffected.
-
-Migrations 001, 002, and 003 also enable row-level security with no policies. That blocks Supabase's `anon` and `authenticated` Data API roles, while the table owner the plugin connects as keeps access.
-
-Remote connections use TLS by default, without verifying the server certificate. To verify it, set `THREATINTEL_DB_SSL=verify-full` and `THREATINTEL_DB_SSL_CA` to the path of your provider's CA file. `THREATINTEL_DB_SSL=disable` turns TLS off.
-
-To check that a saved investigation still matches its evidence, with no network access:
-
-```powershell
-npm run replay -- <investigation-id>
-```
-
-Replay re-derives the investigation from stored provider results and checks each evidence record against its SHA-256 hash. Investigations saved before migration 001 report `not_hashed`, and can differ if the extraction logic has changed since.
-
-## Source correlation
-
-`summary.correlations` compares what independent sources say, keeping every source's value:
-
-| Classification | Meaning | Example |
+| Field | Default | Meaning |
 |---|---|---|
-| `agreement` | Sources say the same thing | CISA KEV and NVD record the same KEV date |
-| `conflict` | Sources disagree about the same thing | Different scores for identical CVSS metrics; NVD records a KEV entry the catalog lacks |
-| `explained_difference` | Sources are answering different questions | NVD 10.0 and Red Hat 9.8 because they rate `S` differently |
-| `incomplete` | A comparison could not be completed, which is neither agreement nor conflict | The KEV check failed; a package or product could not be confidently matched |
+| `nvdApiKey` | none | NVD API key, for higher rate limits. |
+| `requestTimeoutMs` | `15000` | Per-request timeout for sources (1,000 to 60,000). |
 
-Comparisons are deliberately narrow. CVSS v3 and v4 are never compared. Red Hat products are matched to NVD by CPE product and major version, and records with no match are counted as not compared. Fixed versions are compared only when a package's name and namespace match one NVD vendor's product, because `log4j` and `log4j-core` are different artifacts, and so are `python:requests` and `org.fork:requests`. A mismatch is called a conflict only when the package is firmly tied to that vendor. Otherwise it is reported as not comparable.
+### Watchlist
 
-Red Hat's rating scale is separate from CVSS severity, so they are never reported as agreeing. Treating "Important" as similar to HIGH is this engine's approximate interpretation, and it is labelled as one.
+| Field | Default | Meaning |
+|---|---|---|
+| `watchEnabled` | `false` | Run scheduled checks and alert delivery. |
+| `watchNotifyTarget` | none | Alert channel, for example `channel:<id>`. Without it, changes are recorded but not sent. |
+| `watchTickMinutes` | `5` | How often the service looks for due checks and pending messages (1 to 60). |
+| `watchDefaultIntervalHours` | `24` | Default time between checks of one CVE (6 to 168). |
+| `watchMaxEntries` | `100` | Most CVEs the watchlist may hold (1 to 500). |
+| `watchDeliveryMode` | `direct` | `direct` or `openclaw_queue`; see [Delivery](#delivery-and-retries). Also used by the feed. |
 
-## Sources
+### Threat feed
+
+| Field | Default | Meaning |
+|---|---|---|
+| `feedEnabled` | `false` | Run the feed. |
+| `feedNotifyTarget` | none | Feed channel, for example `channel:<id>`. |
+| `feedIntervalHours` | `3` | Hours between cycles (1 to 24). |
+| `feedSources` | all | Enabled [source ids](#sources-1). |
+| `feedBioPharmaTerms` | built-in industry terms | Replaces the built-in terms when set. |
+| `feedBioPharmaProducts` | empty | LIMS, laboratory, manufacturing, and OT products in your Bio/Pharma environments. |
+| `feedSecurityProducts` | empty | Security products in scope: EDR, SIEM, firewall, VPN, IAM, PAM, email security. |
+| `feedLogSources` | empty | Log sources and platforms in scope, for example `Microsoft 365`, `Entra ID`, `AWS`. |
+| `feedMinPriority` | `P3` | Lowest priority posted. |
+| `feedMaxPostsPerCycle` | `3` | Posts per cycle (1 to 20). |
+| `feedCooldownHours` | `24` | Wait before posting an update to a posted item. |
+| `feedDedupeDays` | `14` | How long a posted CVE suppresses other advisories about it. |
+| `feedMaxAgeDays` | `3` | Older items are not posted for the first time; waiting items expire. |
+| `feedUrgentBypass` | `true` | Let new P1 items with confirmed exploitation exceed the per-cycle limit. |
+| `feedUrgentMaxPerCycle` | `2` | Most urgent posts above the limit. |
+
+## CVE investigation
+
+### Sources
 
 | Source | Provides | If it has no record |
 |---|---|---|
@@ -121,68 +177,60 @@ Red Hat's rating scale is separate from CVSS severity, so they are never reporte
 | Red Hat | Vendor impact and shipped fixes | No vendor assessment |
 | OSV | Ecosystem package names and fixed versions | Normal for closed-source products |
 
-OSV's `CVE-*` records hold only upstream git ranges, so the engine follows up to two aliased GHSA advisories and reports any it did not use. Unreviewed and withdrawn advisories are not treated as fix evidence, and distribution records are not followed.
+Every response is validated against a strict contract before it is used. Failures are reported as explicit limitations, and `observed_absence` (checked, not found) is never confused with an error. Transient failures (timeouts, 429, 5xx) are retried within a time budget that honours `Retry-After`; a 404 is never retried.
 
-If only OSV fails, the investigation stays `confirmed` and can be reused for one hour with the gap shown, then OSV is retried. NVD, CISA KEV, and Red Hat failures still prevent reuse.
+OSV's `CVE-*` records hold only upstream git ranges, so the engine follows up to two aliased GHSA advisories and reports any it did not use. Unreviewed and withdrawn advisories are not treated as fix evidence.
 
-## Changes over time
+Investigations are saved with SHA-256-hashed evidence and reused while fresh. If only OSV fails, the investigation stays `confirmed` and is reused for one hour with the gap shown; NVD, CISA KEV, and Red Hat failures prevent reuse.
 
-A refreshed investigation includes `changesSincePrior`, and `threatintel_compare_investigations` compares the two most recent saved investigations. The baseline is first re-derived from its stored evidence through the current engine, so each difference has one meaning:
+### Source correlation
+
+`summary.correlations` compares what independent sources say, keeping every source's value:
+
+| Classification | Meaning | Example |
+|---|---|---|
+| `agreement` | Sources say the same thing | CISA KEV and NVD record the same KEV date |
+| `conflict` | Sources disagree about the same thing | Different scores for identical CVSS metrics |
+| `explained_difference` | Sources answer different questions | NVD 10.0 and Red Hat 9.8, because they rate `S` differently |
+| `incomplete` | A comparison could not be completed | The KEV check failed; a package could not be matched confidently |
+
+Comparisons are deliberately narrow. CVSS v3 and v4 are never compared. Red Hat products are matched to NVD by CPE product and major version. Fixed versions are compared only when a package's name and namespace match one NVD vendor's product, because `log4j` and `log4j-core` are different artifacts. Red Hat's rating scale is never reported as agreeing with CVSS severity; treating "Important" as similar to HIGH is labelled as an approximation.
+
+Each assessment statement cites the facts, provider checks, or evidence it rests on, and inferences reference their supporting facts.
+
+### Changes over time
+
+A refreshed investigation includes `changesSincePrior`, and `threatintel_compare_investigations` compares the two latest saved ones. The baseline is first re-derived from its stored evidence through the current engine, so each difference has one meaning:
 
 - `intelligence_change`: a source that answered both times now says something else.
 - `collection_difference`: a source was unavailable or not checked in one of them.
 - `processing_difference`: the stored evidence gives a different result under the current engine.
 
-Comparison never writes to stored investigations. `baseline.recorded` and `recordedBefore` hold what was originally saved, labelled apart from the re-derived values. `noIntelligenceChange` is `null` when either record is unreliable.
+Integrity is reported in two parts, because hashes cover evidence payloads only: `evidenceRows` (`verified`, `tampered`, `missing`, `inconsistent`, `not_hashed`, `none`) and `recordConsistency`. `fullyVerified` is true only when both hold. Comparison never writes to stored investigations.
 
-Integrity is reported in two parts, because hashes cover evidence payloads only:
+To check offline that a saved investigation still matches its evidence:
 
-- `evidenceRows`: `verified`, `tampered`, `missing`, `inconsistent`, `not_hashed`, or `none`.
-- `recordConsistency`: whether the record matches what its evidence re-derives. Across engine versions this is `unverifiable`.
-
-`fullyVerified` is true only when evidence rows verify and the record is consistent, so missing, empty, or inconsistent evidence is never reported as verified.
-
-## Tool output and answer checking
-
-- Tool results stay under 16,000 characters, the lowest default OpenClaw cap, so truncation cannot remove sections. They are compact JSON, because formatting whitespace would only displace intelligence. Fresh and reused investigations share one schema. Raw source payloads stay in PostgreSQL, and capped lists report `total` and `omitted`. The limit is enforced on the complete response; if abnormal data would exceed it, the result is shortened and marked `_reducedToFit`.
-- Before a final answer is accepted, a deterministic gate compares its CVE IDs, CVSS score, severity, KEV state, and version numbers with the investigation results from that session. A mismatch triggers one revision pass. If a delivered message still conflicts with the evidence, it is sent with a visible warning listing the conflict. The gate also asks for a revision when an answer says data was just retrieved but no provider was queried in that turn, claims sources agree when the comparisons do not establish it, or makes a claim about all Red Hat products that the status counts contradict. It skips sentences that reject a claim, such as "the claimed 9.8 is incorrect". The gate is a floor against fabrication, not a check that the reasoning is correct.
-
-The gate also checks statements about a named Red Hat product, such as "OpenShift 4.12 is fixed", against that product's own rows. A family name such as "OpenShift" whose products have different statuses is reported as ambiguous. Only full product names and a short list of brand words (OpenShift, JBoss, Ansible, and similar) count as naming a product, so ordinary words like "software" or "product" are never read as product claims.
-
-`npm run build; npm run test:contract` runs the real plugin entry offline, faking only the network and database socket.
-
-## Watchlist
-
-The watchlist re-investigates chosen CVEs on a schedule and posts one Discord message when the intelligence changes.
-
-### Tools
-
-| Tool | Purpose |
-|---|---|
-| `threatintel_watch_add` | Watch a CVE. Records a baseline immediately. |
-| `threatintel_watch_remove` | Stop watching. Past alerts are kept. |
-| `threatintel_watch_list` | List watched CVEs with their last result and next check. |
-| `threatintel_watch_set` | Change a CVE's check interval (6 to 168 hours) or pause it. |
-| `threatintel_watch_status` | Delivery counts, recent alerts and message IDs; can re-queue failed alerts. |
-
-All five tools, including the read-only ones, are restricted to OpenClaw owners. Everyone else gets `owner_only`. OpenClaw treats a sender as an owner only when they are listed in `commands.ownerAllowFrom`. Until that is set, the tools refuse everyone:
-
-```powershell
-openclaw config set commands.ownerAllowFrom '["discord:<your-user-id>"]'
+```bash
+npm run replay -- <investigation-id>
 ```
 
-### Configuration
+### Tool output
 
-Set these under `plugins.entries.threatintel-ai-engine.config`:
+Tool results stay under 16,000 characters, OpenClaw's lowest default cap, so truncation cannot remove sections. They are compact JSON; raw payloads stay in PostgreSQL, and capped lists report `total` and `omitted`. If abnormal data would exceed the limit, the result is shortened and marked `_reducedToFit`.
 
-| Field | Default | Meaning |
-|---|---|---|
-| `watchEnabled` | `false` | Runs scheduled checks and delivery in the gateway. |
-| `watchNotifyTarget` | none | Where alerts go, for example `channel:<discord-channel-id>`. Without it, changes are recorded but not sent. |
-| `watchTickMinutes` | `5` | How often the gateway looks for due checks and pending alerts (1 to 60). |
-| `watchDefaultIntervalHours` | `24` | Default time between checks of one CVE (6 to 168). |
-| `watchMaxEntries` | `100` | The most CVEs the watchlist may hold (1 to 500). |
-| `watchDeliveryMode` | `direct` | `direct` or `openclaw_queue`. See below. |
+## Answer checking
+
+Before a final answer is sent, a deterministic gate compares it with the investigations from that session:
+
+- CVE IDs, CVSS scores, severity, KEV state, and version numbers.
+- Statements about a named Red Hat product, such as "OpenShift 4.12 is fixed", against that product's own rows. A family name whose products differ, such as "OpenShift", is reported as ambiguous. Negated forms ("No RHEL versions are affected", "isn't affected") are read as not-affected claims; a negation that cannot be resolved skips the sentence.
+- Claims that data was just retrieved when no source was queried, that sources agree when the comparisons do not show it, or about all Red Hat products when the status counts contradict them.
+
+A mismatch triggers one revision pass. If the delivered message still conflicts with the evidence, it is sent with a visible warning listing the conflict. Sentences that reject a claim ("the claimed 9.8 is incorrect") are skipped. Only full product names and a short list of brand words (OpenShift, JBoss, Ansible, and similar) count as naming a product.
+
+The gate is a floor against fabrication, not a check that the reasoning is correct: it does not judge explanations, CWE names, or narrative.
+
+## Watchlist
 
 ### What triggers an alert
 
@@ -194,53 +242,41 @@ Each check is compared with the CVE's baseline using the same comparison as `thr
 - New package fixed versions.
 - A Red Hat product moving to `affected` or `fixed`, or from `affected` to `not_affected`.
 
-Nothing alerts, and the baseline does not move, when:
-
-- NVD or CISA KEV could not be checked. The check counts as failed and is retried with backoff.
-- A difference is only a `collection_difference` or `processing_difference`, such as a Red Hat outage or an engine upgrade.
-
-A baseline that fails its integrity check (tampered, missing, or inconsistent evidence, or a deleted baseline row) produces an `integrity_warning` alert instead of a silent re-baseline. A baseline that only cannot be verified, for example after an engine upgrade, is replaced quietly and recorded as `baseline_reset`. The baseline moves forward only when every source answered.
-
-After three failed checks in a row, one `monitor_failure` alert is sent, and one `monitor_recovered` alert follows when checks succeed again.
+Nothing alerts, and the baseline does not move, when NVD or CISA KEV could not be checked (the check is retried with backoff), or when a difference is only a `collection_difference` or `processing_difference`. A baseline that fails its integrity check produces an `integrity_warning` alert instead of a silent re-baseline. After three failed checks in a row, one `monitor_failure` alert is sent, and one `monitor_recovered` alert follows.
 
 ### Delivery and retries
 
-Alerts are saved in `watch_events` before they are sent, so a crash or restart never loses one. Each alert is stored once per comparison, so a retried check never repeats it. A change that reverses and then happens again, such as a KEV listing that is removed and later restored, alerts each time.
+Alerts and feed posts are saved in the `watch_events` outbox before they are sent, so a crash never loses one. Each alert is stored once per comparison, so a retried check never repeats it, but a change that reverses and later recurs alerts each time.
 
-In `direct` mode, the default, PostgreSQL is the only retry owner. Each send uses OpenClaw's `deliverOutboundPayloads` with `skipQueue: true`, so OpenClaw never keeps its own copy to retry. A failed send is retried with backoff for up to six attempts, then marked `failed`. `threatintel_watch_status` with `retryFailedDeliveries` puts failed alerts back in the queue.
+- **`direct`** (default): PostgreSQL is the only retry owner. Sends use OpenClaw's `deliverOutboundPayloads` with `skipQueue: true`, so OpenClaw keeps no copy of its own. A failed send is retried with backoff for up to six attempts, then marked `failed`; the status tools can re-queue it.
+- **`openclaw_queue`** (fallback): once OpenClaw has queued a message, it is marked `handed_off` and the outbox never sends it again. One message is never owned by two retry systems.
 
-`openclaw_queue` is a fallback in case direct delivery stops working. Once OpenClaw has queued an alert, it is marked `handed_off`, and the watchlist never sends it again. Only a failure before OpenClaw queues the alert stays with the watchlist's own retries. One alert is never owned by both retry systems.
-
-Delivery is at least once. If the gateway stops after Discord accepts a message but before the result is saved, the alert is sent again after restart, labelled as a possible repeat.
+Delivery is at least once. If the gateway stops after Discord accepts a message but before the result is saved, it is sent again after restart with a note that it may repeat.
 
 ### Scheduling and recovery
 
-Due checks and pending alerts live in PostgreSQL, not in memory. A gateway restart or host reboot resumes where it stopped: overdue checks run on the first cycle, about 30 seconds after the service starts, and unsent alerts are delivered.
-
-Checks and deliveries are claimed with database leases that expire (15 minutes for a check, 2 minutes for a delivery). Two gateways pointed at one database never run the same check or send the same alert. A lease left by a crashed gateway is picked up after it expires.
-
-Monitoring makes at most ten checks per cycle, two seconds apart, with longer source retries than interactive use. The CISA KEV catalog is downloaded at most once an hour and shared across checks, and its `checkedAt` is the download time.
+Due checks and pending messages live in PostgreSQL. After a restart or reboot, overdue checks run on the first cycle, about 30 seconds after the service starts. Checks and deliveries are claimed with expiring database leases (15 minutes and 2 minutes), which work through Supabase's connection pooler, so two gateways never run the same check or send the same message. Monitoring makes at most ten checks per cycle with longer source retries than interactive use, and downloads the KEV catalog at most once an hour.
 
 ## Threat feed
 
-Every 3 hours, the feed collects new advisories, rates each one against your scope, and posts only the ones worth hunting to a Discord channel. A cycle with nothing worth posting posts nothing. It runs inside the watchlist's background service, so there is one scheduler, one lease system, and one delivery outbox.
+Every `feedIntervalHours`, the feed collects new advisories, rates each one against your scope, and posts only the ones worth hunting. A cycle with nothing worth posting posts nothing.
 
 ### Sources
 
 | Id | Source | Notes |
 |---|---|---|
 | `cisa-kev` | CISA Known Exploited Vulnerabilities | Recent additions. The only source of `confirmed` exploitation. |
-| `cisa-advisories` | CISA advisories | Includes joint advisories, whose indicator sections are extracted. KEV announcements are skipped in favour of the catalog. |
+| `cisa-advisories` | CISA advisories | Joint advisories' indicator sections are extracted. |
 | `cisa-ics` | CISA ICS advisories | Deployment sectors are kept. |
-| `msrc` | Microsoft Security Update Guide | First publications only; revisions are mostly informational. |
+| `msrc` | Microsoft Security Update Guide | First publications only. |
 | `paloalto`, `fortinet`, `cisco` | Vendor PSIRT feeds | |
 | `aws`, `gcp` | Cloud security bulletins | |
 
-All sources are public and need no credentials. Each is fetched on its own with retries for timeouts, 429, and 5xx. One failing source never blocks the others, and a cycle where every source fails is recorded as failed, not as an empty success. A page that answers 200 but is not a feed, such as a bot check, counts as a failure.
+All sources are public. Each is fetched on its own with retries, so one failing source never blocks the others. A cycle where every source fails is recorded as failed, never as an empty success, and a page that answers 200 but is not a feed, such as a bot check, counts as a failure.
 
 ### Priority
 
-The rules are fixed and every item records the reasons it got its priority. A model never decides what is posted.
+Fixed rules decide priority, and every item records why. A model never decides what is posted.
 
 | Priority | When |
 |---|---|
@@ -249,68 +285,106 @@ The rules are fixed and every item records the reasons it got its priority. A mo
 | P3 | An in-scope log source or platform with exploitation or high/critical severity; or CISA-confirmed exploitation of anything else |
 | ignore | Everything else |
 
-- **Bio/Pharma relevance** needs an industry term (pharmaceutical, biotech, LIMS, clinical trial, GxP, and similar) or one of your configured Bio/Pharma products. "Healthcare" alone never qualifies, and neither does CISA listing Healthcare and Public Health among an ICS product's sectors, since many vendors list nearly every sector.
-- **Exploitation:** `confirmed` means CISA KEV lists the CVE. `reported` means the source itself says it has been exploited. Denials win, so "not known to be actively exploited" is never read as exploitation, and "an attacker could exploit" describes capability, not an attack. A bulletin bundling more than 10 third-party CVEs is not treated as confirmed exploitation of its product because one of them is in KEV.
-- Terms match whole words or phrases, case-insensitive.
+- **Bio/Pharma relevance** needs an industry term (pharmaceutical, biotech, LIMS, clinical trial, GxP, and similar) or a configured Bio/Pharma product. "Healthcare" alone never qualifies, nor does CISA listing Healthcare among an ICS product's sectors.
+- **Exploitation:** `confirmed` means CISA KEV lists the CVE; `reported` means the source itself says so. Denials win ("not known to be actively exploited"), and "an attacker could exploit" is capability, not an attack. A bulletin bundling more than 10 third-party CVEs is not confirmed exploitation of its product because one of them is in KEV.
+- With the product and log-source lists empty, only Bio/Pharma items, exploited manufacturing OT, and CISA-confirmed exploitation are posted.
 
 ### Indicators
 
-Indicators are taken only from a source's own "Indicators of Compromise" section, never from the rest of a page, where example domains, references, and version numbers look like indicators. Values are kept exactly as published, including defanging such as `hxxp` and `[.]`, and are posted in code spans so Discord does not link them. Domains are taken only when defanged, because a plain domain in an indicator section may be a reference. Without an indicator section, the post says `No IOCs published in the source.` Vendor advisories rarely publish indicators; research articles do, and are planned for phase 6B.
+Indicators come only from a source's own "Indicators of Compromise" section, exactly as published (including defanging such as `hxxp` and `[.]`), and are posted in code spans so Discord does not link them. Domains are taken only when defanged. Without an indicator section, the post says `No IOCs published in the source.` Vendor advisories rarely publish indicators; research articles with indicator parsers are planned.
 
 ### Flood control
 
 - One advisory has one key across feeds, so CISA's two feeds never post it twice.
-- A CVE posted within `feedDedupeDays` is not posted again through another advisory, unless the new one adds higher exploitation or indicators where the earlier post had none, or covers CVEs that were not posted.
-- A posted item is posted again, marked `(updated)`, only after a material change: exploitation rose, or new indicators. Updates wait out `feedCooldownHours`, except newly confirmed P1 exploitation.
-- At most `feedMaxPostsPerCycle` posts per cycle, P1 first, then by exploitation, severity, and recency. The rest wait for later cycles until they are older than `feedMaxAgeDays`.
-- New P1 items with confirmed exploitation may exceed the limit, up to `feedUrgentMaxPerCycle`, when `feedUrgentBypass` is on.
+- A CVE posted within `feedDedupeDays` is not posted again through another advisory unless the new one adds exploitation evidence or indicators, or covers CVEs not yet posted.
+- A posted item is reposted, marked `(updated)`, only after a material change (exploitation rose, or new indicators), and only after `feedCooldownHours`, except newly confirmed P1 exploitation.
+- At most `feedMaxPostsPerCycle` posts per cycle, P1 first. The rest wait for later cycles until they are older than `feedMaxAgeDays`.
 
-### Configuration
+### Post format
 
-Set these under `plugins.entries.threatintel-ai-engine.config`. Lists are JSON arrays, for example `openclaw config set plugins.entries.threatintel-ai-engine.config.feedSecurityProducts '["FortiGate","CrowdStrike Falcon"]'`.
+Each post is its own message, starting with a divider so consecutive posts stay apart in Discord:
 
-| Field | Default | Meaning |
-|---|---|---|
-| `feedEnabled` | `false` | Runs the feed. |
-| `feedNotifyTarget` | none | The feed channel, for example `channel:<id>`. |
-| `feedIntervalHours` | `3` | Hours between cycles (1 to 24). |
-| `feedSources` | all | Enabled source ids from the table above. |
-| `feedBioPharmaTerms` | built-in industry terms | Replaces the built-in terms when set. |
-| `feedBioPharmaProducts` | empty | LIMS, laboratory, manufacturing, and OT products in your Bio/Pharma environments. |
-| `feedSecurityProducts` | empty | Security products in scope. |
-| `feedLogSources` | empty | Log sources and platforms in scope. |
-| `feedMinPriority` | `P3` | Lowest priority posted. |
-| `feedMaxPostsPerCycle` | `3` | Posts per cycle (1 to 20). |
-| `feedCooldownHours` | `24` | Wait before posting an update to a posted item. |
-| `feedDedupeDays` | `14` | How long a posted CVE suppresses other advisories about it. |
-| `feedMaxAgeDays` | `3` | Older items are not posted for the first time, and waiting items expire. |
-| `feedUrgentBypass` | `true` | Let confirmed P1 exploitation exceed the limit. |
-| `feedUrgentMaxPerCycle` | `2` | Most urgent posts above the limit. |
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+**Threat Name:**
+Siemens Desigo, Gridscale: CVE-2026-111497
 
-With the product and log-source lists empty, only Bio/Pharma items, exploited manufacturing OT, and CISA-confirmed exploitation are posted.
+**Affected Tools / Products:**
+Siemens Desigo, Gridscale
 
-### Operations
+**Affected Platforms:**
+Not specified in the source.
 
-`threatintel_feed_status` (owner only) shows the last and next cycle, each recent run's counts (discovered, filtered, duplicates suppressed, selected, deferred) and duration, each source's outcome, recent posts with delivery state and message ids, and can re-queue failed posts. `threatintel_feed_run_now` makes the next cycle due immediately. Operational detail stays in these tools and the gateway log, never in the channel.
+**Article:**
+<https://www.cisa.gov/news-events/ics-advisories/icsa-26-316-02>
 
-Posts are saved in the shared `watch_events` outbox, in the same transaction that marks their item posted, so a restart never loses a post or posts an item twice. Delivery, retries, and the at-least-once caveat are the watchlist's: a crash after Discord accepts a post but before the result is saved re-sends it, with a note that it may repeat. Apply `db/migrations/003_threat_feed.sql` before enabling the feed.
+**IOCs to Hunt:**
+No IOCs published in the source.
+```
 
-## Production
+## Deployment
 
-The Windows gateway used for development is not a production host. [deploy/gcp](deploy/gcp/README.md) moves it to a free Google Cloud e2-micro with scripts for setup, state migration, a systemd service, and a health ping. For 24/7 monitoring:
+### Always-on host
 
-- **Host.** Run the gateway on an always-on Linux host or VM, as a systemd service with `Restart=always` and `WantedBy=multi-user.target`, or as a container with `restart: unless-stopped`. Either one restarts it after a crash and a reboot. The first start after an install can take about two minutes.
-- **One instance.** Run a single gateway with `watchEnabled: true`. Leases make a second one safe, but it adds nothing.
-- **Clock.** Keep NTP enabled. Schedules and leases use the database clock, while log timestamps use the host clock.
-- **Database.** Check which backups your Supabase plan includes: daily backups and point-in-time recovery depend on the plan. Independently, take a regular `pg_dump` of the plugin's tables: `investigations`, `evidence`, `facts`, `inferences`, `watchlist`, and `watch_events`. After a restore, replay a recent investigation to confirm that its evidence still verifies.
-- **Monitoring.** `monitor_failure` alerts report sources that stay down. `threatintel_watch_status` shows failed and pending deliveries. Alerts cannot report a stopped gateway, so add an external uptime check on the gateway host or process.
-- **Logs.** Keep the gateway logs with rotation. A failed check or delivery cycle is logged. Each CVE's last check error and each alert's last delivery error are stored in PostgreSQL and shown by `threatintel_watch_list` and `threatintel_watch_status`.
-- **Upgrades.** Keep OpenClaw on the pinned version until the delivery contract test passes on the new version.
+The gateway needs an always-on Linux host. [deploy/gcp](deploy/gcp/README.md) runs it on a free-tier Google Cloud e2-micro, with scripts to set up the VM, migrate OpenClaw's state from another machine, and install a systemd user service that restarts after crashes and starts at boot. It also includes an optional hard spending cap, which disables billing when a budget is reached.
+
+### Deploying a new version
+
+On the host, after CI passes on `main`:
+
+```bash
+cd ~/ThreatIntel-AI
+git pull --ff-only
+npm ci
+npm run build
+openclaw gateway restart
+```
+
+Apply any new database migration before restarting. The bot is offline for about a minute while the gateway restarts.
+
+### Production checklist
+
+- **One gateway per bot token.** Two would answer every chat message twice. Leases make the background work safe, but chat is not.
+- **Pinned OpenClaw.** Upgrade only after `npm test` passes on the new version: its delivery contract test checks the behaviour the outbox relies on.
+- **Backups.** Check which backups your Supabase plan includes, and take a regular `pg_dump` of `investigations`, `evidence`, `facts`, `inferences`, `watchlist`, `watch_events`, `feed_items`, `feed_runs`, and `feed_state`. After a restore, replay a recent investigation.
+- **Monitoring.** `monitor_failure` alerts and the status tools report source and delivery problems; nothing inside the gateway can report the gateway itself being down, so add an external uptime check.
+- **Clock.** Keep NTP on. Schedules and leases use the database clock.
+
+## Testing and CI
+
+```bash
+npm test               # build, then every suite that needs no network or database
+npm run test:database  # needs PostgreSQL with the schema and all migrations
+npm run test:live      # calls the live NVD, CISA, Red Hat, and OSV APIs
+```
+
+- `npm test` includes the plugin contract test, which runs the real plugin entry offline, and an OpenClaw delivery contract test that fails if OpenClaw is not the pinned version or stops honouring `skipQueue`.
+- Feed tests parse recorded copies of every real feed in `test-fixtures/feed/`.
+- The regression case is `CVE-2024-3094`: `confirmed` status, CVSS 10 CRITICAL, KEV `not-listed`.
+
+GitHub Actions runs `npm test`, plugin validation, and `npm run test:database` against a real PostgreSQL 17 service on every push and pull request.
+
+## Project layout
+
+```
+src/
+  index.ts           Plugin entry: tools, config schema, hooks, background service
+  engine.ts          Investigation orchestration
+  sources/           NVD, CISA KEV, Red Hat, OSV clients and retry handling
+  correlation/       Source correlation and assessment
+  verification/      Answer gate and claim checks
+  persistence/       PostgreSQL storage, history, comparison, replay
+  watch/             Watchlist, shared background service, outbox delivery
+  feed/              Threat feed: sources, classification, IOCs, selection
+db/                  Schema and migrations
+deploy/gcp/          Google Cloud deployment and spending cap
+test-fixtures/feed/  Recorded feed samples for tests
+```
 
 ## Design rules
 
-- The LLM is the **reasoning layer**, not the source of truth.
-- Every confirmed fact must trace back to a retrieved evidence document.
-- Every inference must reference the facts that support it.
-- Provider failures are surfaced as explicit limitations, never silently dropped.
-- `observed_absence` (source checked, CVE not found) is never conflated with an error or a positive result.
+- The LLM is the reasoning layer, not the source of truth.
+- Every confirmed fact traces back to a retrieved evidence document, and every inference references the facts that support it.
+- Source failures are explicit limitations, never silently dropped, and absence is never confused with an error.
+- Deterministic rules, not the model, decide what is alerted and posted.
+- Every message is saved before it is sent, and has exactly one retry owner.
