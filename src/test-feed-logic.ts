@@ -8,7 +8,8 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { BUNDLE_LIMIT, evaluate, type ScopeConfig } from "./feed/classify.js";
-import { formatFeedPost, NO_IOCS, POST_DIVIDER } from "./feed/format.js";
+import { CONCEPTS } from "./feed/concepts.js";
+import { formatFeedPost, formatQuietNotice, NO_IOCS, POST_DIVIDER } from "./feed/format.js";
 import { extractIocs } from "./feed/iocs.js";
 import { HOW_TO_READ, summarizeFeed } from "./feed/tools.js";
 import { parseFeed } from "./feed/rss.js";
@@ -515,7 +516,39 @@ function testStatusSummary(): void {
     console.log("✓ Feed status starts with a plain summary that cannot be read as pending posts or a failure");
 }
 
+/* ------------------------------ Quiet notice ------------------------------ */
+
+function testQuietNotice(): void {
+    /* The concept list: vetted, short, and uniform. */
+    assert(CONCEPTS.length >= 40, `enough concepts that repeats are rare: ${CONCEPTS.length}`);
+    assert(new Set(CONCEPTS.map((concept) => concept.question.toLowerCase())).size === CONCEPTS.length, "no concept repeats");
+
+    for (const concept of CONCEPTS) {
+        assert(/^What is .+\?$/.test(concept.question), `every question starts with "What is": ${concept.question}`);
+        assert(concept.answer.length >= 60 && concept.answer.length <= 320, `answers are one or two lines: ${concept.question} (${concept.answer.length})`);
+        assert((concept.answer.match(/[.!?](\s|$)/g) ?? []).length <= 3, `answers are at most a few sentences: ${concept.question}`);
+        assert(!/@|<|\*\*|\]\(/.test(concept.answer + concept.question), `no mentions or markdown in a concept: ${concept.question}`);
+    }
+
+    const notice = formatQuietNotice(3, CONCEPTS[0]);
+    const lines = notice.split("\n");
+
+    assert(lines[0] === POST_DIVIDER, "the notice starts with the divider, like every feed message");
+    assert(lines[1] === "There's no latest feed in the last 3 hours.", `the notice says so plainly: ${lines[1]}`);
+    assert(lines[3] === "**What is NVD?**" && lines[4] === CONCEPTS[0].answer, "the concept follows as a question and a short answer");
+    assert(lines.length === 5 && notice.length < 600, "the notice stays short");
+
+    assert(formatQuietNotice(1, CONCEPTS[0]).includes("in the last hour."), "the wording follows the configured interval");
+
+    const partial = formatQuietNotice(3, CONCEPTS[0], { failed: 2, total: 9 });
+
+    assert(/2 of 9 sources could not be checked/.test(partial), "a notice after a partial cycle says which coverage was missing");
+
+    console.log("✓ The quiet notice is short, honest about coverage, and carries a vetted concept");
+}
+
 function main(): void {
+    testQuietNotice();
     testStatusSummary();
     testParsing();
     testExploitationEvidence();

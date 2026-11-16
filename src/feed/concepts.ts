@@ -1,0 +1,58 @@
+/*
+ * Short security concepts posted with the quiet-cycle notice. They are written
+ * and reviewed here, never generated at run time, so the channel only ever
+ * shows vetted text. Each answer is one or two sentences.
+ */
+
+export type Concept = { question: string; answer: string };
+
+export const CONCEPTS: Concept[] = [
+    { question: "What is NVD?", answer: "The National Vulnerability Database is the U.S. government's public catalogue of vulnerabilities. It enriches each CVE with a severity score, weakness type, and the products affected." },
+    { question: "What is a CVE?", answer: "A CVE (Common Vulnerabilities and Exposures) is a unique public identifier for one security flaw, such as CVE-2024-3094. It lets vendors, tools, and analysts refer to the same issue unambiguously." },
+    { question: "What is CVSS?", answer: "The Common Vulnerability Scoring System rates a vulnerability's severity from 0 to 10 based on how it is exploited and what it impacts. A score describes severity, not the likelihood of attack." },
+    { question: "What is CISA KEV?", answer: "The Known Exploited Vulnerabilities catalogue is CISA's list of vulnerabilities with reliable evidence of exploitation in the wild. An entry is a strong signal to patch first." },
+    { question: "What is a SIEM tool?", answer: "Security Information and Event Management collects logs from across an organisation, correlates them, and raises alerts. It is the SOC's central place to search and investigate activity." },
+    { question: "What is IAM?", answer: "Identity and Access Management controls who can sign in and what each identity may do. It covers accounts, authentication, roles, and permissions." },
+    { question: "What is EDR?", answer: "Endpoint Detection and Response records activity on laptops and servers, detects suspicious behaviour, and lets analysts investigate and isolate a device." },
+    { question: "What is XDR?", answer: "Extended Detection and Response combines signals from endpoints, email, identity, network, and cloud in one platform, so related activity is detected and investigated together." },
+    { question: "What is a SOC?", answer: "A Security Operations Center is the team that monitors an organisation for threats, investigates alerts, and coordinates the response to incidents." },
+    { question: "What is an IOC?", answer: "An Indicator of Compromise is an observable sign of malicious activity, such as an IP address, domain, file hash, or file name, that defenders can search for in their logs." },
+    { question: "What is threat hunting?", answer: "Threat hunting is proactively searching logs and telemetry for attacker activity that existing alerts did not catch, usually starting from a hypothesis or fresh intelligence." },
+    { question: "What is MITRE ATT&CK?", answer: "ATT&CK is a public knowledge base of the tactics and techniques attackers use, organised by stage of an attack. Teams use it to describe behaviour and find detection gaps." },
+    { question: "What is PAM?", answer: "Privileged Access Management protects administrator-level accounts by vaulting their credentials, granting access only when needed, and recording privileged sessions." },
+    { question: "What is MFA?", answer: "Multi-factor authentication requires a second proof of identity, such as an authenticator app or security key, in addition to a password. A stolen password alone is then not enough." },
+    { question: "What is Zero Trust?", answer: "Zero Trust is a security model that never trusts a request because of where it comes from. Every access is verified by identity, device, and context, with the least privilege needed." },
+    { question: "What is phishing?", answer: "Phishing is a message that impersonates a trusted sender to trick someone into revealing credentials, opening malware, or approving a payment." },
+    { question: "What is ransomware?", answer: "Ransomware is malware that encrypts an organisation's data, and often steals it first, then demands payment for the key or to prevent publication." },
+    { question: "What is a zero-day?", answer: "A zero-day is a vulnerability attackers exploit before the vendor has released a fix, so defenders have had zero days to patch." },
+    { question: "What is a supply-chain attack?", answer: "A supply-chain attack compromises a trusted supplier, such as a software library or update, so the malicious change reaches every organisation that uses it." },
+    { question: "What is lateral movement?", answer: "Lateral movement is an attacker moving from the first compromised system to others inside the network, usually with stolen credentials, to reach valuable targets." },
+    { question: "What is privilege escalation?", answer: "Privilege escalation is gaining more access than was granted, for example turning an ordinary user account into an administrator." },
+    { question: "What is command and control (C2)?", answer: "Command and control is the channel an attacker uses to send instructions to compromised machines and receive data back. Blocking or spotting it disrupts the attack." },
+    { question: "What is a CWE?", answer: "A CWE (Common Weakness Enumeration) names a type of software flaw, such as SQL injection. A CVE is one specific instance; its CWE is the category it belongs to." },
+    { question: "What is defanging?", answer: "Defanging rewrites a malicious address so it cannot be clicked by accident, for example hxxp://evil[.]example. Analysts restore it only inside their tools." },
+    { question: "What is a file hash?", answer: "A file hash, such as SHA-256, is a fingerprint computed from a file's contents. Identical files share a hash, so it identifies a known malicious file exactly." },
+    { question: "What is SOAR?", answer: "Security Orchestration, Automation, and Response runs playbooks that automate routine response steps, such as enriching an alert or disabling an account." },
+    { question: "What is DLP?", answer: "Data Loss Prevention detects and blocks sensitive data leaving the organisation, for example through email, uploads, or removable drives." },
+    { question: "What is a WAF?", answer: "A Web Application Firewall inspects web traffic to an application and blocks common attacks such as SQL injection and cross-site scripting." },
+    { question: "What is an IDS or IPS?", answer: "An Intrusion Detection System alerts on malicious network activity. An Intrusion Prevention System also blocks it." },
+    { question: "What is patch management?", answer: "Patch management is the process of finding, testing, and installing software updates so that known vulnerabilities are closed in a controlled way." },
+    { question: "What is a vulnerability scan?", answer: "A vulnerability scan automatically checks systems for known flaws and misconfigurations. It reports what may be exploitable but does not exploit it." },
+    { question: "What is a penetration test?", answer: "A penetration test is an authorised, simulated attack in which testers exploit weaknesses to show how far a real attacker could get." },
+    { question: "What is least privilege?", answer: "Least privilege means giving each user and system only the access it needs for its job. It limits the damage a compromised account can do." },
+    { question: "What is an SBOM?", answer: "A Software Bill of Materials lists the components inside a piece of software. It lets you check quickly whether a newly disclosed vulnerability affects you." },
+    { question: "What is EPSS?", answer: "The Exploit Prediction Scoring System estimates the probability that a vulnerability will be exploited in the next 30 days. It complements CVSS, which measures severity." },
+    { question: "What is OSINT?", answer: "Open-Source Intelligence is information gathered from public sources. Attackers use it to plan, and defenders use it to see what is exposed about them." },
+    { question: "What is a honeypot?", answer: "A honeypot is a decoy system with no real use, so any activity on it is suspicious. It reveals attackers and their methods early." },
+    { question: "What is a sandbox?", answer: "A sandbox is an isolated environment where a suspicious file or link is run safely to observe what it does." },
+    { question: "What is a PSIRT?", answer: "A Product Security Incident Response Team is the vendor group that handles vulnerabilities in its own products and publishes security advisories." },
+    { question: "What is OT security?", answer: "Operational Technology security protects the systems that control physical processes, such as manufacturing lines and laboratory equipment, where safety and uptime come first." },
+    { question: "What is TLP?", answer: "The Traffic Light Protocol labels how widely shared information may be passed on, from TLP:RED (named recipients only) to TLP:CLEAR (public)." },
+    { question: "What is a TTP?", answer: "Tactics, Techniques, and Procedures describe how an attacker operates. They change far less often than IP addresses or hashes, so detecting them lasts longer." },
+    { question: "What is the attack surface?", answer: "The attack surface is everything an attacker could try to reach: exposed services, accounts, devices, and third parties. Reducing it removes opportunities." },
+    { question: "What is credential stuffing?", answer: "Credential stuffing tries usernames and passwords leaked from one site against others, relying on people reusing passwords." },
+    { question: "What is SSO?", answer: "Single Sign-On lets a user sign in once to reach many applications. It centralises authentication, which makes strong sign-in and quick removal of access easier." },
+    { question: "What is a log source?", answer: "A log source is any system that sends records of its activity to the SOC, such as a firewall, identity provider, or server. Without its logs, attacks on it are invisible." },
+    { question: "What is DFIR?", answer: "Digital Forensics and Incident Response is the work of containing an attack and reconstructing what happened from the evidence on systems and in logs." },
+    { question: "What is a backdoor?", answer: "A backdoor is a hidden way into a system that bypasses normal authentication. Attackers plant one to return later, even after passwords change." },
+];

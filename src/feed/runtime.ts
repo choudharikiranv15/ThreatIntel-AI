@@ -38,6 +38,7 @@ export type FeedPluginConfig = {
     feedMaxAgeDays?: number;
     feedUrgentBypass?: boolean;
     feedUrgentMaxPerCycle?: number;
+    feedQuietNotice?: boolean;
 };
 
 export type FeedSettings = {
@@ -50,6 +51,7 @@ export type FeedSettings = {
     selection: SelectionConfig;
     requestTimeoutMs: number;
     deliveryMode: DeliveryMode;
+    quietNotice: boolean;
 };
 
 const clean = (values: string[] | undefined): string[] =>
@@ -81,6 +83,7 @@ export function feedSettings(config: FeedPluginConfig): FeedSettings {
         },
         requestTimeoutMs: config.requestTimeoutMs ?? 15000,
         deliveryMode: config.watchDeliveryMode ?? "direct",
+        quietNotice: config.feedQuietNotice ?? true,
     };
 }
 
@@ -142,6 +145,7 @@ export function createFeedHooks(
                 scope: settings.scope,
                 selection: settings.selection,
                 intervalHours: settings.intervalHours,
+                quietNotice: settings.quietNotice,
                 log,
             }),
     };

@@ -19,6 +19,7 @@ export const HOW_TO_READ = [
     "A successful run with 'selected' 0 means nothing new qualified. That is normal when sources publish nothing new, and is not a failure or a delay.",
     "Items are never held back for a later cycle except when 'deferred' is above 0, which means the per-cycle post limit was reached.",
     "The feed and the watchlist are separate: feed posts are not watchlist entries.",
+    "quietNotices are the 'no latest feed' messages posted after a cycle with nothing to post; they are not threat posts and are counted separately.",
 ];
 
 type RunSummary = {
@@ -153,6 +154,7 @@ export function buildFeedTools(context: WatchToolContext, settings: FeedSettings
                         items: await store.itemCounts(),
                         deliveries,
                         recentPosts,
+                        quietNotices: { enabled: settings.quietNotice, ...(await store.quietNoticeCounts()) },
                         requeuedFailedDeliveries: requeued,
                     };
                 }),

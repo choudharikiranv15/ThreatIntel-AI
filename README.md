@@ -165,6 +165,7 @@ All settings live under `plugins.entries.threatintel-ai-engine.config`. Lists ar
 | `feedMaxAgeDays` | `3` | Older items are not posted for the first time; waiting items expire. |
 | `feedUrgentBypass` | `true` | Let new P1 items with confirmed exploitation exceed the per-cycle limit. |
 | `feedUrgentMaxPerCycle` | `2` | Most urgent posts above the limit. |
+| `feedQuietNotice` | `true` | Post a short notice with a security concept when a cycle has nothing to post. |
 
 ## CVE investigation
 
@@ -259,7 +260,7 @@ Due checks and pending messages live in PostgreSQL. After a restart or reboot, o
 
 ## Threat feed
 
-Every `feedIntervalHours`, the feed collects new advisories, rates each one against your scope, and posts only the ones worth hunting. A cycle with nothing worth posting posts nothing.
+Every `feedIntervalHours`, the feed collects new advisories, rates each one against your scope, and posts only the ones worth hunting. A cycle with nothing worth posting posts no threats, only a short [quiet notice](#quiet-cycles) unless that is turned off.
 
 ### Sources
 
@@ -321,6 +322,20 @@ Not specified in the source.
 **IOCs to Hunt:**
 No IOCs published in the source.
 ```
+
+### Quiet cycles
+
+When a cycle succeeds with nothing to post, the feed posts a short notice, so the channel shows it is running, with one security concept:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+There's no latest feed in the last 3 hours.
+
+**What is NVD?**
+The National Vulnerability Database is the U.S. government's public catalogue of vulnerabilities. It enriches each CVE with a severity score, weakness type, and the products affected.
+```
+
+Concepts come from a reviewed list in `src/feed/concepts.ts`, in order, and are never generated at run time. If every source failed, no notice is posted, because "no new feed" would be untrue; if some failed, the notice says how many. A notice not delivered before the next cycle is dropped, never sent late. Set `feedQuietNotice` to `false` for a channel that stays silent when there is nothing to post.
 
 ## Deployment
 

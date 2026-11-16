@@ -246,6 +246,88 @@ async function testEmptyCycle(): Promise<void> {
     console.log("✓ An empty cycle produces no messages");
 }
 
+async function quietNotices(): Promise<Array<{ message: string; delivery_status: string }>> {
+    const { rows } = await db.query(
+        "SELECT message, delivery_status FROM public.watch_events WHERE channel = 'feed' AND field = 'quiet_notice' ORDER BY observed_at",
+    );
+
+    return rows;
+}
+
+async function testQuietNotice(): Promise<void> {
+    await reset();
+
+    const state = world();
+
+    state.items.aws = [raw({ source: "aws", itemKey: "aws:noise", title: "Documentation fix", severity: "low" })];
+
+    /* Off unless asked for: other deployments keep a silent channel. */
+    await runFeedCycleIfDue(deps(state));
+    assert((await quietNotices()).length === 0, "without the setting, a quiet cycle posts nothing");
+
+    /* A quiet cycle posts one notice with a concept. */
+    await makeDue();
+    await runFeedCycleIfDue(deps(state, { quietNotice: true }));
+
+    const [first] = await quietNotices();
+
+    assert(
+        first?.delivery_status === "pending" &&
+        first.message.includes("There's no latest feed in the last 3 hours.") &&
+        /\*\*What is .+\?\*\*/.test(first.message),
+        `a quiet cycle posts the notice and a concept: ${first?.message}`,
+    );
+    assert((await posts()).filter((post) => post.target !== "feed:quiet").length === 0, "the notice is not a threat post");
+
+    /* Not delivered before the next cycle: dropped, never sent late. The next notice has a new concept. */
+    await makeDue();
+    await runFeedCycleIfDue(deps(state, { quietNotice: true }));
+
+    const afterSecond = await quietNotices();
+
+    assert(afterSecond.length === 2 && afterSecond[0].delivery_status === "not_deliverable", "an undelivered notice is cancelled by the next cycle");
+    assert(afterSecond[1].delivery_status === "pending" && afterSecond[1].message !== afterSecond[0].message, "each notice carries the next concept");
+
+    /* It is delivered to the feed channel like any post, once. */
+    const sent: string[] = [];
+    const feedDeliverer: Deliverer = async (text) => (sent.push(text), { status: "sent", messageIds: ["q1"] });
+
+    await deliverPending({ owner: "q", check: undefined as never, deliverer: null, feedDeliverer });
+    await deliverPending({ owner: "q", check: undefined as never, deliverer: null, feedDeliverer });
+
+    assert(sent.length === 1 && sent[0] === afterSecond[1].message, "only the current notice is delivered, once");
+
+    /* A cycle with a real post has no notice. */
+    state.items.fortinet = [raw({ itemKey: "fortinet:FG-QUIET-1", title: "FortiGate flaw", severity: "critical" })];
+    await makeDue();
+    await runFeedCycleIfDue(deps(state, { quietNotice: true }));
+
+    assert((await quietNotices()).length === 2, "a cycle that posts a threat adds no notice");
+
+    /* Every source down: no notice, because 'no new feed' would be untrue. */
+    for (const source of ["cisa-kev", "fortinet", "aws", "cisco"] as const) {
+        state.failing.add(source);
+    }
+
+    await makeDue();
+    await runFeedCycleIfDue(deps(state, { quietNotice: true }));
+
+    assert((await quietNotices()).length === 2, "a failed cycle never claims there is no new feed");
+
+    /* Some sources down and nothing new: the notice says coverage was partial. */
+    state.failing.delete("aws");
+    state.failing.delete("cisa-kev");
+    state.items.fortinet = [];
+    await db.query("UPDATE public.feed_state SET next_run_at = now() - interval '1 minute', lease_owner = NULL, lease_expires_at = NULL WHERE id = 1");
+    await runFeedCycleIfDue(deps(state, { quietNotice: true }));
+
+    const last = (await quietNotices()).at(-1);
+
+    assert(/2 of 4 sources could not be checked/.test(last?.message ?? ""), `a partial quiet cycle states its coverage: ${last?.message}`);
+
+    console.log("✓ Quiet cycles post one current notice with a concept; failed cycles stay silent");
+}
+
 async function testProviderFailures(): Promise<void> {
     await reset();
 
@@ -374,7 +456,7 @@ async function testDelivery(): Promise<void> {
 }
 
 async function testTools(): Promise<void> {
-    const settings = { enabled: true, notifyTarget: "channel:1", intervalHours: 3, sources: ["fortinet"], unknownSources: [], scope: SCOPE, selection: DEFAULT_SELECTION, requestTimeoutMs: 1000, deliveryMode: "direct" } as FeedSettings;
+    const settings = { enabled: true, notifyTarget: "channel:1", intervalHours: 3, sources: ["fortinet"], unknownSources: [], scope: SCOPE, selection: DEFAULT_SELECTION, requestTimeoutMs: 1000, deliveryMode: "direct", quietNotice: true } as FeedSettings;
 
     const stranger = buildFeedTools({ senderIsOwner: false }, settings);
     const denied = JSON.parse((await stranger.status.execute("x", {})).content[0].text);
@@ -412,6 +494,7 @@ async function main(): Promise<void> {
         await testMaterialUpdate();
         await testLimitsAndQueue();
         await testEmptyCycle();
+        await testQuietNotice();
         await testProviderFailures();
         await testLeasesAndRecovery();
         await testDelivery();

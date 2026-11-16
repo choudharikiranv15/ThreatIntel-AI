@@ -512,7 +512,7 @@ export async function itemCounts(): Promise<Record<string, number>> {
 
 export async function feedDeliveryCounts(): Promise<Record<string, number>> {
     const { rows } = await db.query<{ delivery_status: string; count: string }>(
-        "SELECT delivery_status, count(*) FROM public.watch_events WHERE channel = 'feed' GROUP BY delivery_status",
+        "SELECT delivery_status, count(*) FROM public.watch_events WHERE channel = 'feed' AND field = 'feed' GROUP BY delivery_status",
     );
 
     return Object.fromEntries(rows.map((row) => [row.delivery_status, Number(row.count)]));
@@ -524,7 +524,7 @@ export async function recentPosts(limit: number) {
                 e.possible_duplicate, i.title
          FROM public.watch_events e
          LEFT JOIN public.feed_items i ON i.item_key = e.target
-         WHERE e.channel = 'feed' ORDER BY e.observed_at DESC LIMIT $1`,
+         WHERE e.channel = 'feed' AND e.field = 'feed' ORDER BY e.observed_at DESC LIMIT $1`,
         [limit],
     );
 
@@ -539,4 +539,54 @@ export async function recentPosts(limit: number) {
         messageIds: row.message_ids,
         possibleDuplicate: row.possible_duplicate,
     }));
+}
+
+/* ----------------------------- Quiet notices ----------------------------- */
+
+const QUIET_FIELD = "quiet_notice";
+
+/**
+ * A notice that was not delivered before the next cycle is dropped: "nothing
+ * in the last 3 hours" must never arrive hours late.
+ */
+export async function cancelStaleQuietNotices(): Promise<void> {
+    await db.query(
+        `UPDATE public.watch_events
+         SET delivery_status = 'not_deliverable', next_attempt_at = NULL,
+             last_error = 'superseded by a newer cycle'
+         WHERE channel = 'feed' AND field = $1 AND delivery_status IN ('pending', 'failed')`,
+        [QUIET_FIELD],
+    );
+}
+
+/** How many notices have been created, which picks the next concept in order. */
+export async function quietNoticeCount(): Promise<number> {
+    const { rows } = await db.query<{ n: string }>(
+        "SELECT count(*) AS n FROM public.watch_events WHERE channel = 'feed' AND field = $1",
+        [QUIET_FIELD],
+    );
+
+    return Number(rows[0].n);
+}
+
+/** Saves a quiet notice in the outbox, once per run. */
+export async function insertQuietNotice(runId: string, message: string): Promise<void> {
+    await db.query(
+        `INSERT INTO public.watch_events (
+             target, check_id, kind, fingerprint, field, explanation, deliverable, delivery_status,
+             next_attempt_at, channel, message
+         )
+         VALUES ('feed:quiet', $1, 'threat_feed', $2, $3, 'No new feed items this cycle.', true, 'pending', now(), 'feed', $4)
+         ON CONFLICT (fingerprint) DO NOTHING`,
+        [runId, `feed-quiet:${runId}`, QUIET_FIELD, message],
+    );
+}
+
+export async function quietNoticeCounts(): Promise<Record<string, number>> {
+    const { rows } = await db.query<{ delivery_status: string; count: string }>(
+        "SELECT delivery_status, count(*) FROM public.watch_events WHERE channel = 'feed' AND field = $1 GROUP BY delivery_status",
+        [QUIET_FIELD],
+    );
+
+    return Object.fromEntries(rows.map((row) => [row.delivery_status, Number(row.count)]));
 }

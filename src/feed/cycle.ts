@@ -1,5 +1,6 @@
 import { evaluate, type ScopeConfig } from "./classify.js";
-import { formatFeedPost } from "./format.js";
+import { CONCEPTS } from "./concepts.js";
+import { formatFeedPost, formatQuietNotice } from "./format.js";
 import { selectForPublication, type Candidate, type SelectionConfig } from "./select.js";
 import type { SourceFetcher } from "./sources.js";
 import * as store from "./store.js";
@@ -21,6 +22,8 @@ export type FeedCycleDeps = {
     scope: ScopeConfig;
     selection: SelectionConfig;
     intervalHours: number;
+    /** Post a short notice, with a security concept, when a cycle has nothing to post. */
+    quietNotice?: boolean;
     log?: (message: string) => void;
 };
 
@@ -41,6 +44,9 @@ export async function runFeedCycleIfDue(deps: FeedCycleDeps): Promise<FeedCycleR
 
     const started = Date.now();
     const runId = await store.startRun();
+
+    // An undelivered notice from the previous cycle is out of date now.
+    await store.cancelStaleQuietNotices();
     let providers: ProviderOutcome[] = [];
 
     try {
@@ -177,6 +183,15 @@ export async function runFeedCycleIfDue(deps: FeedCycleDeps): Promise<FeedCycleR
         await store.pruneItems();
 
         const status = failed.length > 0 ? "partial" : "success";
+
+        if (deps.quietNotice && counts.selected === 0) {
+            const concept = CONCEPTS[(await store.quietNoticeCount()) % CONCEPTS.length];
+
+            await store.insertQuietNotice(
+                runId,
+                formatQuietNotice(deps.intervalHours, concept, { failed: failed.length, total: deps.sources.length }),
+            );
+        }
 
         await store.finishRun(
             runId,

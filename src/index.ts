@@ -275,6 +275,14 @@ const entry = defineToolPlugin({
       }),
     ),
 
+    feedQuietNotice: Type.Optional(
+      Type.Boolean({
+        description:
+          "When a cycle has nothing to post, post a short notice with a security concept. On by default.",
+        default: true,
+      }),
+    ),
+
     feedUrgentMaxPerCycle: Type.Optional(
       Type.Integer({
         description: "Most urgent posts above the per-cycle limit.",

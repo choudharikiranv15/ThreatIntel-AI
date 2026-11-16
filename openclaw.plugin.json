@@ -163,6 +163,11 @@
         "description": "Let new P1 items with CISA-confirmed exploitation exceed the per-cycle limit.",
         "default": true
       },
+      "feedQuietNotice": {
+        "type": "boolean",
+        "description": "When a cycle has nothing to post, post a short notice with a security concept. On by default.",
+        "default": true
+      },
       "feedUrgentMaxPerCycle": {
         "type": "integer",
         "description": "Most urgent posts above the per-cycle limit.",

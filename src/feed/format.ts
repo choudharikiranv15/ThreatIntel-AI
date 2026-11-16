@@ -1,4 +1,5 @@
 import { sanitize } from "../watch/notify.js";
+import type { Concept } from "./concepts.js";
 import type { EvaluatedItem, Ioc } from "./types.js";
 
 /*
@@ -101,4 +102,29 @@ export function formatFeedPost(item: EvaluatedItem, options: { updated?: boolean
     }
 
     return `${head}\n${lines.join("\n")}`;
+}
+
+/**
+ * Posted when a cycle found nothing to post, so the channel shows the feed is
+ * alive, with one short concept to make the message worth reading.
+ */
+export function formatQuietNotice(
+    intervalHours: number,
+    concept: Concept,
+    sources: { failed: number; total: number } = { failed: 0, total: 0 },
+): string {
+    const hours = intervalHours === 1 ? "hour" : `${intervalHours} hours`;
+    const lines = [
+        POST_DIVIDER,
+        `There's no latest feed in the last ${hours}.`,
+    ];
+
+    if (sources.failed > 0) {
+        // Honest about coverage: silence from a source that did not answer proves nothing.
+        lines.push(`-# ${sources.failed} of ${sources.total} sources could not be checked this cycle.`);
+    }
+
+    lines.push("", `**${concept.question}**`, concept.answer);
+
+    return lines.join("\n");
 }
