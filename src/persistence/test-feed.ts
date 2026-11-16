@@ -385,6 +385,14 @@ async function testTools(): Promise<void> {
     const status = JSON.parse((await owner.status.execute("x", {})).content[0].text);
 
     assert(status.recentRuns.length > 0 && status.state && status.deliveries && Array.isArray(status.recentPosts), "status shows runs, schedule, deliveries, and posts");
+    assert(
+        Object.keys(status)[0] === "summary" && /last cycle ran at/.test(status.summary) && Array.isArray(status.howToRead),
+        `the status starts with a plain summary and reading rules: ${String(status.summary).slice(0, 200)}`,
+    );
+    assert(
+        status.recentPosts.every((post: { title?: string }) => typeof post.title === "string" && post.title.length > 0),
+        "recent posts are named by title",
+    );
     assert(typeof status.recentRuns[0].durationMs === "number" && "duplicatesSuppressed" in status.recentRuns[0], "each run shows duration and duplicate suppression");
 
     await db.query("UPDATE public.feed_state SET next_run_at = now() + interval '3 hours' WHERE id = 1");

@@ -520,12 +520,16 @@ export async function feedDeliveryCounts(): Promise<Record<string, number>> {
 
 export async function recentPosts(limit: number) {
     const { rows } = await db.query(
-        `SELECT target, scope, observed_at, delivery_status, attempts, last_error, message_ids, possible_duplicate
-         FROM public.watch_events WHERE channel = 'feed' ORDER BY observed_at DESC LIMIT $1`,
+        `SELECT e.target, e.scope, e.observed_at, e.delivery_status, e.attempts, e.last_error, e.message_ids,
+                e.possible_duplicate, i.title
+         FROM public.watch_events e
+         LEFT JOIN public.feed_items i ON i.item_key = e.target
+         WHERE e.channel = 'feed' ORDER BY e.observed_at DESC LIMIT $1`,
         [limit],
     );
 
     return rows.map((row) => ({
+        title: row.title ?? row.target,
         item: row.target,
         priority: row.scope,
         selectedAt: iso(row.observed_at),

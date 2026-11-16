@@ -10,6 +10,7 @@ import path from "node:path";
 import { BUNDLE_LIMIT, evaluate, type ScopeConfig } from "./feed/classify.js";
 import { formatFeedPost, NO_IOCS, POST_DIVIDER } from "./feed/format.js";
 import { extractIocs } from "./feed/iocs.js";
+import { HOW_TO_READ, summarizeFeed } from "./feed/tools.js";
 import { parseFeed } from "./feed/rss.js";
 import {
     DEFAULT_SELECTION,
@@ -476,7 +477,46 @@ function testFormat(): void {
     console.log("✓ Posts follow the required format exactly and are safe against hostile source text");
 }
 
+/* ---------------------------- Status summary ---------------------------- */
+
+function testStatusSummary(): void {
+    const posts = [
+        { title: "CVE-2026-123039 Check Point flaw", selectedAt: "2026-11-14T10:57:57.000Z", deliveryStatus: "sent" },
+        { title: "CVE-2026-114713 UnrealIRCd flaw", selectedAt: "2026-11-14T10:57:57.500Z", deliveryStatus: "sent" },
+        { title: "Siemens Desigo", selectedAt: "2026-11-14T07:53:48.000Z", deliveryStatus: "sent" },
+    ];
+    const run = { startedAt: "2026-11-16T06:07:48.000Z", status: "success", discovered: 74, newItems: 0, selected: 0, deferred: 0, error: null };
+
+    /* The live misreading: a quiet run must read as normal, and sent posts as already delivered. */
+    const quiet = summarizeFeed({ enabled: true, nextRunAt: "2026-11-16T09:07:54.000Z", lastRun: run, posts, sentTotal: 6 });
+
+    assert(/0 of them new, and 0 were posted/.test(quiet), `the quiet run is stated plainly: ${quiet}`);
+    assert(/normal when the sources publish nothing new/.test(quiet), "a quiet run is explained as normal");
+    assert(/next cycle is due at 2026-11-16T09:07:54/.test(quiet), "the next cycle is given");
+    assert(
+        quiet.includes("Check Point") && quiet.includes("UnrealIRCd") && !quiet.includes("Siemens"),
+        `the most recent batch is named by title, and only that batch: ${quiet}`,
+    );
+    assert(/already in the feed channel/.test(quiet), "delivered posts are said to be in the channel");
+
+    const failed = summarizeFeed({ enabled: true, nextRunAt: null, lastRun: { ...run, status: "failed", error: "every source failed" }, posts, sentTotal: 6 });
+
+    assert(/failed and collected nothing: every source failed/.test(failed), "a failed run is never an empty success");
+
+    const limited = summarizeFeed({ enabled: true, nextRunAt: null, lastRun: { ...run, selected: 3, deferred: 2 }, posts, sentTotal: 6 });
+
+    assert(/2 qualifying items wait for a later cycle/.test(limited), "deferral is explained only when it happened");
+
+    assert(/disabled/.test(summarizeFeed({ enabled: false, nextRunAt: null, lastRun: null, posts: [], sentTotal: 0 })), "a disabled feed says so");
+    assert(/Nothing has been posted yet/.test(summarizeFeed({ enabled: true, nextRunAt: null, lastRun: null, posts: [], sentTotal: 0 })), "no posts says so");
+
+    assert(HOW_TO_READ.some((rule) => /never posted again/.test(rule)), "the reading rules state that posts are not repeated");
+
+    console.log("✓ Feed status starts with a plain summary that cannot be read as pending posts or a failure");
+}
+
 function main(): void {
+    testStatusSummary();
     testParsing();
     testExploitationEvidence();
     testPriorities();
