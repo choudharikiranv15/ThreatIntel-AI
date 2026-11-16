@@ -84,8 +84,12 @@ export function formatFeedPost(item: EvaluatedItem, options: { updated?: boolean
         return `${head}\n${NO_IOCS}`;
     }
 
+    // The source's own caution about its indicators, or a note that the list was capped.
+    const notes = [...new Set(item.iocs.map((ioc) => ioc.note).filter((note): note is string => Boolean(note)))];
+    const noteLine = notes.length > 0 ? `\n-# Source note: ${sanitize(notes[0], 240)}` : "";
+
     const lines: string[] = [];
-    let length = head.length;
+    let length = head.length + noteLine.length;
 
     for (const [index, ioc] of item.iocs.entries()) {
         const line = `- ${IOC_LABELS[ioc.type]}: ${code(ioc.value)}`;
@@ -101,7 +105,7 @@ export function formatFeedPost(item: EvaluatedItem, options: { updated?: boolean
         length += line.length + 1;
     }
 
-    return `${head}\n${lines.join("\n")}`;
+    return `${head}\n${lines.join("\n")}${noteLine}`;
 }
 
 /**

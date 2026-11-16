@@ -1,8 +1,8 @@
 import type { CisaKevCatalog } from "../sources/cisa-kev.js";
 import { fetchWithRetry, MONITOR_RETRY, type RetryPolicy } from "../sources/request-signal.js";
-import { extractIocs } from "./iocs.js";
+import { extractIocs, extractIocsFromIndicatorFile, finalizeIocs, indicatorFileLinks } from "./iocs.js";
 import { htmlToText, parseFeed, type FeedEntry } from "./rss.js";
-import type { FeedSourceId, RawItem, Severity } from "./types.js";
+import { RESEARCH_SOURCES, type FeedSourceId, type Ioc, type RawItem, type Severity } from "./types.js";
 
 /*
  * One adapter per source. Each turns the source's own format into RawItems and
@@ -257,6 +257,44 @@ function parseVendor(
     });
 }
 
+/*
+ * Research articles. The feed gives a title and summary, which are all that is
+ * used for scope matching: the article page also carries sidebars and related
+ * posts whose words would match by accident. Indicators are added afterwards
+ * from the article's own indicator section (see enrichResearchItem).
+ */
+function parseResearch(source: "dfir-report" | "unit42", entries: FeedEntry[]): RawItem[] {
+    return entries
+        .filter((entry) => /^https:\/\//.test(entry.link))
+        .map((entry) => {
+            const url = canonicalUrl(entry.link);
+
+            return item(source, `${source}:${lastPathSegment(url)}`, {
+                title: entry.title,
+                url,
+                publishedAt: entry.published ?? entry.updated,
+                text: htmlToText(entry.html),
+                research: true,
+            });
+        });
+}
+
+const ARTICLE_LIMIT = 3_000_000;
+
+export type TextFetcher = (url: string) => Promise<string>;
+
+/** Adds the indicators an article publishes: its indicator section, and any trusted indicator file it links. */
+export async function enrichResearchItem(raw: RawItem, fetchText: TextFetcher): Promise<RawItem> {
+    const html = (await fetchText(raw.url)).slice(0, ARTICLE_LIMIT);
+    const iocs: Ioc[] = extractIocs(html, raw.url);
+
+    for (const link of indicatorFileLinks(html)) {
+        iocs.push(...extractIocsFromIndicatorFile((await fetchText(link)).slice(0, ARTICLE_LIMIT), link));
+    }
+
+    return { ...raw, iocs: finalizeIocs(iocs) };
+}
+
 /* ------------------------------- Registry -------------------------------- */
 
 export const FEED_URLS: Record<Exclude<FeedSourceId, "cisa-kev">, string> = {
@@ -268,6 +306,8 @@ export const FEED_URLS: Record<Exclude<FeedSourceId, "cisa-kev">, string> = {
     cisco: "https://sec.cloudapps.cisco.com/security/center/psirtrss20/CiscoSecurityAdvisory.xml",
     aws: "https://aws.amazon.com/security/security-bulletins/rss/feed/",
     gcp: "https://cloud.google.com/feeds/google-cloud-security-bulletins.xml",
+    "dfir-report": "https://thedfirreport.com/feed/",
+    unit42: "https://unit42.paloaltonetworks.com/feed/",
 };
 
 /** Parses one source's feed document. Exported for tests with recorded feeds. */
@@ -280,6 +320,9 @@ export function parseSource(source: Exclude<FeedSourceId, "cisa-kev">, xml: stri
             return parseCisa(source, entries);
         case "msrc":
             return parseMsrc(entries);
+        case "dfir-report":
+        case "unit42":
+            return parseResearch(source, entries);
         default:
             return parseVendor(source, entries);
     }
@@ -292,26 +335,19 @@ export function withinWindow(items: RawItem[], since: Date): RawItem[] {
 
 export type SourceFetcher = (source: FeedSourceId) => Promise<RawItem[]>;
 
+/** How long an article's indicators are reused before the page is read again. */
+const ARTICLE_CACHE_MS = 24 * 60 * 60 * 1000;
+
 export function createSourceFetcher(options: {
     timeoutMs: number;
     retry?: RetryPolicy;
     since: () => Date;
     kevCatalog: () => Promise<{ catalog: CisaKevCatalog }>;
 }): SourceFetcher {
-    return async (source) => {
-        if (source === "cisa-kev") {
-            return parseKev((await options.kevCatalog()).catalog, options.since());
-        }
-
+    const get = async (url: string, accept: string): Promise<string> => {
         const response = await fetchWithRetry(
-            FEED_URLS[source],
-            {
-                method: "GET",
-                headers: {
-                    Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml",
-                    "User-Agent": "ThreatIntel-AI feed reader",
-                },
-            },
+            url,
+            { method: "GET", headers: { Accept: accept, "User-Agent": "ThreatIntel-AI feed reader" } },
             { timeoutMs: options.timeoutMs, retry: options.retry ?? MONITOR_RETRY },
         );
 
@@ -319,7 +355,49 @@ export function createSourceFetcher(options: {
             throw new Error(`HTTP ${response.status}`);
         }
 
-        const body = await response.text();
+        return response.text();
+    };
+
+    // Each article page is read at most once a day, not on every cycle.
+    const articles = new Map<string, { at: number; iocs: Ioc[] }>();
+
+    const withIndicators = async (source: FeedSourceId, items: RawItem[]): Promise<RawItem[]> => {
+        const enriched: RawItem[] = [];
+        let failures = 0;
+
+        for (const raw of items) {
+            const cached = articles.get(raw.itemKey);
+
+            if (cached && Date.now() - cached.at < ARTICLE_CACHE_MS) {
+                enriched.push({ ...raw, iocs: cached.iocs });
+                continue;
+            }
+
+            try {
+                const result = await enrichResearchItem(raw, (url) => get(url, "text/html, text/plain, */*"));
+
+                articles.set(raw.itemKey, { at: Date.now(), iocs: result.iocs });
+                enriched.push(result);
+            } catch {
+                // Left out this cycle and retried next: posting it without its
+                // indicators would wrongly say the source published none.
+                failures += 1;
+            }
+        }
+
+        if (items.length > 0 && failures === items.length) {
+            throw new Error(`${source}: no article page could be read`);
+        }
+
+        return enriched;
+    };
+
+    return async (source) => {
+        if (source === "cisa-kev") {
+            return parseKev((await options.kevCatalog()).catalog, options.since());
+        }
+
+        const body = await get(FEED_URLS[source], "application/rss+xml, application/atom+xml, application/xml, text/xml");
 
         if (!/<(rss|feed)[\s>]/i.test(body.slice(0, 2000))) {
             // A bot-check or error page answered with 200.
@@ -327,6 +405,8 @@ export function createSourceFetcher(options: {
         }
 
         // Some feeds hold years of history (MSRC lists every CVE); only recent items matter.
-        return withinWindow(parseSource(source, body), options.since());
+        const recent = withinWindow(parseSource(source, body), options.since());
+
+        return RESEARCH_SOURCES.includes(source) ? withIndicators(source, recent) : recent;
     };
 }

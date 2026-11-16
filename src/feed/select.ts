@@ -51,6 +51,74 @@ export type RecentCve = {
     iocCount: number;
 };
 
+/** A recent post, for recognising the same threat arriving through another article. */
+export type RecentPost = {
+    itemKey: string;
+    title: string;
+    publishedAt: string;
+    iocValues: ReadonlySet<string>;
+};
+
+const TITLE_STOPWORDS = new Set([
+    "the", "and", "for", "with", "from", "into", "that", "this", "new", "how", "what", "why", "are", "was",
+    "via", "using", "use", "uses", "inside", "attack", "attacks", "threat", "threats", "campaign", "analysis",
+    "report", "alert", "flash", "security", "vulnerability", "vulnerabilities", "malware",
+]);
+
+function titleWords(title: string): Set<string> {
+    return new Set(
+        (title.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((word) => word.length >= 3 && !TITLE_STOPWORDS.has(word)),
+    );
+}
+
+/** Shared distinctive words over all distinctive words, 0 to 1. */
+export function titleSimilarity(a: string, b: string): number {
+    const first = titleWords(a);
+    const second = titleWords(b);
+
+    if (first.size === 0 || second.size === 0) {
+        return 0;
+    }
+
+    const shared = [...first].filter((word) => second.has(word)).length;
+
+    return shared / (first.size + second.size - shared);
+}
+
+const IOC_OVERLAP = 0.8;
+const TITLE_MATCH = 0.7;
+
+/**
+ * The recent post that already covers this threat, if any. An item whose
+ * indicators were nearly all posted adds nothing to hunt; an item with no CVE
+ * and no indicators is the same threat when its title is nearly the same.
+ * CVE overlap is handled separately.
+ */
+export function sameThreat(
+    item: EvaluatedItem,
+    posts: readonly RecentPost[],
+    now: Date,
+    config: SelectionConfig,
+): RecentPost | null {
+    for (const post of posts) {
+        if (post.itemKey === item.itemKey || hoursBetween(post.publishedAt, now) > config.dedupeDays * 24) {
+            continue;
+        }
+
+        if (item.iocs.length > 0) {
+            const known = item.iocs.filter((ioc) => post.iocValues.has(ioc.value.toLowerCase())).length;
+
+            if (known / item.iocs.length >= IOC_OVERLAP) {
+                return post;
+            }
+        } else if (item.cves.length === 0 && titleSimilarity(item.title, post.title) >= TITLE_MATCH) {
+            return post;
+        }
+    }
+
+    return null;
+}
+
 export type Decision =
     | { kind: "publish"; updated: boolean; urgent: boolean }
     | { kind: "defer"; reason: string }
@@ -118,8 +186,10 @@ export function selectForPublication(
     recentCves: ReadonlyMap<string, RecentCve>,
     config: SelectionConfig,
     now: Date,
+    recentPosts: readonly RecentPost[] = [],
 ): Map<string, Decision> {
     const decisions = new Map<string, Decision>();
+    const posts = [...recentPosts];
     const eligible: Array<Candidate & { updated: boolean; urgent: boolean }> = [];
 
     for (const candidate of candidates) {
@@ -175,6 +245,13 @@ export function selectForPublication(
             continue;
         }
 
+        const repeat = candidate.updated ? null : sameThreat(item, posts, now, config);
+
+        if (repeat) {
+            decisions.set(item.itemKey, { kind: "suppress", reason: `same threat as ${repeat.itemKey}, with nothing new to hunt` });
+            continue;
+        }
+
         const withinLimit = posted < config.maxPostsPerCycle;
         const urgentException = !withinLimit && candidate.urgent && config.urgentBypass && urgentPosted < config.urgentMaxPerCycle;
 
@@ -190,6 +267,13 @@ export function selectForPublication(
         }
 
         decisions.set(item.itemKey, { kind: "publish", updated: candidate.updated, urgent: urgentException });
+
+        posts.push({
+            itemKey: item.itemKey,
+            title: item.title,
+            publishedAt: now.toISOString(),
+            iocValues: new Set(item.iocs.map((ioc) => ioc.value.toLowerCase())),
+        });
 
         for (const cve of item.cves) {
             covered.set(cve, {

@@ -12,7 +12,8 @@ import type { Confidence, Evaluation, Exploitation, Priority, RawItem, Severity 
  *       severity, Bio/Pharma relevance at lower severity, or reported
  *       exploitation of manufacturing OT.
  *   P3  An in-scope log source or platform with exploitation or high/critical
- *       severity, or confirmed exploitation of anything else.
+ *       severity, confirmed exploitation of anything else, or a research
+ *       article that publishes indicators to hunt.
  *   ignore  Everything else.
  */
 
@@ -108,7 +109,9 @@ export function evaluate(item: RawItem, scope: ScopeConfig, kevCves: ReadonlySet
         exploitation === "confirmed"
             ? "exploitation confirmed by CISA KEV"
             : exploitation === "reported"
-                ? "the source reports exploitation"
+                ? item.research
+                    ? "a research article describes exploitation (unverified: not a vendor or CISA statement)"
+                    : "the source reports exploitation"
                 : "no exploitation evidence",
     );
     if (bundle && kevHits.length > 0) {
@@ -135,6 +138,10 @@ export function evaluate(item: RawItem, scope: ScopeConfig, kevCves: ReadonlySet
         priority = "P3";
     } else if (exploitation === "confirmed") {
         priority = "P3";
+    } else if (item.research && item.iocs.length > 0) {
+        // Published indicators are directly huntable, whatever the scope lists say.
+        priority = "P3";
+        reasons.push(`research article publishing ${item.iocs.length} indicators`);
     }
 
     if (priority === "ignore") {
@@ -150,7 +157,7 @@ export function evaluate(item: RawItem, scope: ScopeConfig, kevCves: ReadonlySet
 
     if (priority === "ignore") {
         confidence = "high";
-    } else if (exploitation === "confirmed" || inTitle || (manufacturingOt && !bioPharma)) {
+    } else if (exploitation === "confirmed" || inTitle || (manufacturingOt && !bioPharma) || (item.research && item.iocs.length > 0)) {
         confidence = "high";
     } else if (bioPharma || securityProducts.length > 0 || logSources.length > 0) {
         // Matched only in the body text, which may mention the term in passing.

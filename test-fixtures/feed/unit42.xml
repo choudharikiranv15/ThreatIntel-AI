@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:atom="http://www.w3.org/2005/Atom"
+	xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
+	xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+	xmlns:dcterms="http://purl.org/dc/terms/"
+>
+
+<channel>
+	<title>Unit 42</title>
+	<atom:link href="https://unit42.paloaltonetworks.com/feed/" rel="self" type="application/rss+xml" />
+	<link>https://unit42.paloaltonetworks.com/</link>
+	<description>Palo Alto Networks</description>
+	<lastBuildDate>Fri, 13 Nov 2026 17:36:07 +0000</lastBuildDate>
+	<language>en-US</language>
+	<sy:updatePeriod>
+	hourly	</sy:updatePeriod>
+	<sy:updateFrequency>
+	1	</sy:updateFrequency>
+	<generator>https://wordpress.org/?v=7.1.4</generator>
+
+<image>
+	<url>https://unit42.paloaltonetworks.com/wp-content/uploads/2024/06/icon-Unit42-180x180-1.png</url>
+	<title>Unit 42</title>
+	<link>https://unit42.paloaltonetworks.com/</link>
+	<width>32</width>
+	<height>32</height>
+</image> 
+	<item>
+		<title>Attackers Use Autonomous AI to Target Semiconductor, Defense and Civil Society Sectors</title>
+		<link>https://unit42.paloaltonetworks.com/cairn-framework-ai-autonomous-attacks/</link>
+		
+		<dc:creator><![CDATA[Unit 42]]></dc:creator>
+		<pubDate>Thu, 12 Nov 2026 15:00:31 +0000</pubDate>
+				<category><![CDATA[Malware]]></category>
+		<category><![CDATA[Threat Research]]></category>
+		<category><![CDATA[API]]></category>
+		<category><![CDATA[DeepSeek]]></category>
+		<category><![CDATA[exploits]]></category>
+		<category><![CDATA[guardrails]]></category>
+		<category><![CDATA[penetration testing]]></category>
+		<category><![CDATA[privilege escalation]]></category>
+		<category><![CDATA[VPN]]></category>
+		<guid isPermaLink="false">https://unit42.paloaltonetworks.com/?p=189684</guid>
+
+					<description><![CDATA[<p>Our analysis of how attackers used the open-source Cairn AI agent framework to autonomously breach semiconductor, defense and civic targets.</p>
+<p>The post <a href="https://unit42.paloaltonetworks.com/cairn-framework-ai-autonomous-attacks/">Attackers Use Autonomous AI to Target Semiconductor, Defense and Civil Society Sectors</a> appeared first on <a href="https://unit42.paloaltonetworks.com">Unit 42</a>.</p>
+]]></description>
+		
+		
+		
+		<readTime>8</readTime>
+		<featuredImage>https://unit42.paloaltonetworks.com/wp-content/uploads/2026/11/AdobeStock_992950050-5-300x300.jpg</featuredImage>
+		<dcterms:extent>8</dcterms:extent>
+		<enclosure url="https://unit42.paloaltonetworks.com/wp-content/uploads/2026/11/AdobeStock_992950050-5.jpg" type="image/jpeg"  length="1555076"/>
+			</item>
+<item>
+		<title>ARTEX and AI-Powered Red Teaming Tools: What Defenders Need to Know</title>
+		<link>https://unit42.paloaltonetworks.com/artex-and-ai-powered-red-teaming-tools/</link>
+		
+		<dc:creator><![CDATA[Cuong Dinh, Richard Emerson, Samantha Stallings, Ofek Lahiani and Ben Magee]]></dc:creator>
+		<pubDate>Wed, 11 Nov 2026 23:00:53 +0000</pubDate>
+				<category><![CDATA[General]]></category>
+		<category><![CDATA[Insights]]></category>
+		<category><![CDATA[GenAI]]></category>
+		<category><![CDATA[LLM]]></category>
+		<category><![CDATA[penetration testing]]></category>
+		<guid isPermaLink="false">https://unit42.paloaltonetworks.com/?p=189723</guid>
+
+					<description><![CDATA[<p>Learn what Unit 42 discovered about attacker use of AI-powered red team tools, and how to mitigate these attacks.</p>
+<p>The post <a href="https://unit42.paloaltonetworks.com/artex-and-ai-powered-red-teaming-tools/">ARTEX and AI-Powered Red Teaming Tools: What Defenders Need to Know</a> appeared first on <a href="https://unit42.paloaltonetworks.com">Unit 42</a>.</p>
+]]></description>
+		
+		
+		
+		<readTime>6</readTime>
+		<featuredImage>https://unit42.paloaltonetworks.com/wp-content/uploads/2026/11/02_General_Category_1505x922-300x300.jpg</featuredImage>
+		<dcterms:extent>6</dcterms:extent>
+		<enclosure url="https://unit42.paloaltonetworks.com/wp-content/uploads/2026/11/02_General_Category_1505x922.jpg" type="image/jpeg"  length="606662"/>
+			</item>
+<item>
+		<title>The XG Files: Falcon C2 Flying Under The (Browser) Radar</title>
+		<link>https://unit42.paloaltonetworks.com/falcon-c2-browser-compromise/</link>
+		
+		<dc:creator><![CDATA[Unit 42]]></dc:creator>
+		<pubDate>Wed, 11 Nov 2026 15:00:23 +0000</pubDate>
+				<category><![CDATA[Malware]]></category>
+		<category><![CDATA[Threat Research]]></category>
+		<category><![CDATA[Adobe Flash Player]]></category>
+		<category><![CDATA[browser extension]]></category>
+		<category><![CDATA[cryptographic]]></category>
+		<category><![CDATA[DLL Sideloading]]></category>
+		<category><![CDATA[exfiltration]]></category>
+		<category><![CDATA[JSON]]></category>
+		<category><![CDATA[Proxy Server]]></category>
+		<category><![CDATA[web server]]></category>
+		<category><![CDATA[XOR]]></category>
+		<guid isPermaLink="false">https://unit42.paloaltonetworks.com/?p=189298</guid>
+
+					<description><![CDATA[<p>We uncover Falcon C2, a browser-based threat framework targeting governments via malicious scripts, extensions, and the Antino implant.</p>
+<p>The post <a href="https://unit42.paloaltonetworks.com/falcon-c2-browser-compromise/">The XG Files: Falcon C2 Flying Under The (Browser) Radar</a> appeared first on <a href="https://unit42.paloaltonetworks.com">Unit 42</a>.</p>
+]]></description>
+		
+		
+		
+		<readTime>24</readTime>
+		<featuredImage>https://unit42.paloaltonetworks.com/wp-content/uploads/2026/11/06_Malware_Category_1920x900-8-300x300.jpg</featuredImage>
+		<dcterms:extent>24</dcterms:extent>
+		<enclosure url="https://unit42.paloaltonetworks.com/wp-content/uploads/2026/11/06_Malware_Category_1920x900-8.jpg" type="image/jpeg"  length="1106422"/>
+			</item>
+<item>
+		<title>Turning Up the Heat: Inside the Attacks on Europe’s Refrigeration Systems</title>
+		<link>https://unit42.paloaltonetworks.com/europes-refrigeration-systems-attacks/</link>
+		
+		<dc:creator><![CDATA[Matt Brady and Jared Valentine]]></dc:creator>
+		<pubDate>Fri, 06 Nov 2026 21:15:09 +0000</pubDate>
+				<category><![CDATA[Hospitality Hacks and Retail Reality Checks]]></category>
+		<category><![CDATA[Insights]]></category>
+		<guid isPermaLink="false">https://unit42.paloaltonetworks.com/?p=189049</guid>
+
+					<description><![CDATA[<p>Unit 42 examines recent cyberattacks targeting European refrigeration systems and outlines defense and mitigation strategies.</p>
+<p>The post <a href="https://unit42.paloaltonetworks.com/europes-refrigeration-systems-attacks/">Turning Up the Heat: Inside the Attacks on Europe’s Refrigeration Systems</a> appeared first on <a href="https://unit42.paloaltonetworks.com">Unit 42</a>.</p>
+]]></description>
+		
+		
+		
+		<readTime>4</readTime>
+		<featuredImage>https://unit42.paloaltonetworks.com/wp-content/uploads/2026/11/06_Myth-Busting_Category_1505x922-300x300.jpg</featuredImage>
+		<dcterms:extent>4</dcterms:extent>
+		<enclosure url="https://unit42.paloaltonetworks.com/wp-content/uploads/2026/11/06_Myth-Busting_Category_1505x922.jpg" type="image/jpeg"  length="770335"/>
+			</item>
+</channel>
+</rss>

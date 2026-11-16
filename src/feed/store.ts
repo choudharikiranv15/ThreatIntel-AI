@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 
 import { db } from "../persistence/db.js";
-import type { Decision, PublishedState, RecentCve } from "./select.js";
+import type { Decision, PublishedState, RecentCve, RecentPost } from "./select.js";
 import type { EvaluatedItem, Exploitation, Ioc, Priority, ProviderOutcome, Severity } from "./types.js";
 
 /*
@@ -374,6 +374,23 @@ export async function recentCves(days: number): Promise<Map<string, RecentCve>> 
             },
         ]),
     );
+}
+
+/** Items posted within the window, with their indicators, for same-threat detection. */
+export async function recentPostedItems(days: number): Promise<RecentPost[]> {
+    const { rows } = await db.query<{ item_key: string; title: string; last_published_at: Date; iocs: Ioc[] }>(
+        `SELECT item_key, title, last_published_at, iocs
+         FROM public.feed_items
+         WHERE last_published_at > now() - make_interval(days => $1::int)`,
+        [days],
+    );
+
+    return rows.map((row) => ({
+        itemKey: row.item_key,
+        title: row.title,
+        publishedAt: row.last_published_at.toISOString(),
+        iocValues: new Set((row.iocs ?? []).map((ioc) => String(ioc.value).toLowerCase())),
+    }));
 }
 
 const STATE_FOR: Record<Exclude<Decision["kind"], "publish" | "keep">, StoredItem["state"]> = {

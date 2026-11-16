@@ -160,6 +160,7 @@ export async function runFeedCycleIfDue(deps: FeedCycleDeps): Promise<FeedCycleR
             await store.recentCves(deps.selection.dedupeDays),
             deps.selection,
             new Date(),
+            await store.recentPostedItems(deps.selection.dedupeDays),
         );
 
         const messages = new Map<string, string>();

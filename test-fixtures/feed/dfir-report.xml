@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:atom="http://www.w3.org/2005/Atom"
+	xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
+	xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+	>
+
+<channel>
+	<title>The DFIR Report</title>
+	<atom:link href="https://thedfirreport.com/feed/" rel="self" type="application/rss+xml" />
+	<link>https://thedfirreport.com/home/</link>
+	<description>Actionable Cyber Threat Intelligence</description>
+	<lastBuildDate>Tue, 25 Aug 2026 18:43:08 +0000</lastBuildDate>
+	<language>en-US</language>
+	<sy:updatePeriod>
+	hourly	</sy:updatePeriod>
+	<sy:updateFrequency>
+	1	</sy:updateFrequency>
+	<generator>https://wordpress.org/?v=7.1.2</generator>
+
+<image>
+	<url>https://thedfirreport.com/wp-content/uploads/cropped-DFIR-Favicon-Image@2x-32x32.png</url>
+	<title>The DFIR Report</title>
+	<link>https://thedfirreport.com/home/</link>
+	<width>32</width>
+	<height>32</height>
+</image> 
+<site xmlns="com-wordpress:feed-additions:1">175340963</site>	<item>
+		<title>BengalSEO Part 1: Anatomy of the Operation</title>
+		<link>https://thedfirreport.com/2026/08/24/bengalseo-part-1-anatomy-of-the-operation/</link>
+		
+		<dc:creator><![CDATA[editor]]></dc:creator>
+		<pubDate>Mon, 24 Aug 2026 14:28:41 +0000</pubDate>
+				<category><![CDATA[scam]]></category>
+		<category><![CDATA[bengalseo]]></category>
+		<guid isPermaLink="false">https://thedfirreport.com/?p=50572</guid>
+
+					<description><![CDATA[<p>Key Takeaways The DFIR Report Offerings Check out our Products here and our Services here. Want a demo, more information on our services, pricing or just want to chat? Get in Touch Contact us&#160;today for pricing or a demo! Case Summary In March 2026, our team identified an SEO poisoning campaign leading to malware deployment [&#8230;]</p>
+<p>The post <a href="https://thedfirreport.com/2026/08/24/bengalseo-part-1-anatomy-of-the-operation/">BengalSEO Part 1: Anatomy of the Operation</a> appeared first on <a href="https://thedfirreport.com">The DFIR Report</a>.</p>
+]]></description>
+		
+		
+		
+		<post-id xmlns="com-wordpress:feed-additions:1">50572</post-id>	</item>
+<item>
+		<title>From Bing Search to Ransomware: Bumblebee and AdaptixC2 Deliver Akira</title>
+		<link>https://thedfirreport.com/2026/06/29/from-bing-search-to-ransomware-bumblebee-and-adaptixc2-deliver-akira-3/</link>
+		
+		<dc:creator><![CDATA[editor]]></dc:creator>
+		<pubDate>Mon, 29 Jun 2026 13:07:17 +0000</pubDate>
+				<category><![CDATA[akira]]></category>
+		<category><![CDATA[ransomware]]></category>
+		<guid isPermaLink="false">https://thedfirreport.com/?p=50310</guid>
+
+					<description><![CDATA[<p>Key Takeaways This case was first reported to customers in a threat brief released in July 2025 and in a public flash alert in August 2025 in partnership with Swisscom B2B CSIRT, which observed another intrusion tied to the same campaign. This report contains data from both intrusions. We plan to release a DFIR Labs [&#8230;]</p>
+<p>The post <a href="https://thedfirreport.com/2026/06/29/from-bing-search-to-ransomware-bumblebee-and-adaptixc2-deliver-akira-3/">From Bing Search to Ransomware: Bumblebee and AdaptixC2 Deliver Akira</a> appeared first on <a href="https://thedfirreport.com">The DFIR Report</a>.</p>
+]]></description>
+		
+		
+		
+		<post-id xmlns="com-wordpress:feed-additions:1">50310</post-id>	</item>
+<item>
+		<title>Flash Alert: EtherRat and TukTuk C2 End in The Gentleman Ransomware</title>
+		<link>https://thedfirreport.com/2026/05/11/flash-alert-etherrat-and-tuktuk-c2-end-in-the-gentleman-ransomware/</link>
+		
+		<dc:creator><![CDATA[editor]]></dc:creator>
+		<pubDate>Mon, 11 May 2026 14:05:04 +0000</pubDate>
+				<category><![CDATA[Flash Alert]]></category>
+		<category><![CDATA[ransomware]]></category>
+		<category><![CDATA[thegentlemen]]></category>
+		<guid isPermaLink="false">https://thedfirreport.com/?p=50191</guid>
+
+					<description><![CDATA[<p>The EtherRAT malware family was first reported by Sysdig back in December 2025. At that time, the initial access vector was exploitation of CVE-2025-55182 (React2Shell) targeting Linux servers. In March 2026, a Windows variant campaign was reported by Atos, with their investigation showing evidence of activity going back to the previous December. In April, we [&#8230;]</p>
+<p>The post <a href="https://thedfirreport.com/2026/05/11/flash-alert-etherrat-and-tuktuk-c2-end-in-the-gentleman-ransomware/">Flash Alert: EtherRat and TukTuk C2 End in The Gentleman Ransomware</a> appeared first on <a href="https://thedfirreport.com">The DFIR Report</a>.</p>
+]]></description>
+		
+		
+		
+		<post-id xmlns="com-wordpress:feed-additions:1">50191</post-id>	</item>
+<item>
+		<title>Bissa Scanner Exposed: AI-Assisted Mass Exploitation and Credential Harvesting</title>
+		<link>https://thedfirreport.com/2026/04/22/bissa-scanner-exposed-ai-assisted-mass-exploitation-and-credential-harvesting/</link>
+		
+		<dc:creator><![CDATA[editor]]></dc:creator>
+		<pubDate>Wed, 22 Apr 2026 14:51:21 +0000</pubDate>
+				<category><![CDATA[opendir]]></category>
+		<category><![CDATA[Threat Actor Insights]]></category>
+		<guid isPermaLink="false">https://thedfirreport.com/?p=50133</guid>
+
+					<description><![CDATA[<p>Key Takeaways We identified an exposed server that provided unusual visibility into a large-scale, multi-victim exploitation and collection operation. Artifacts on the host showed that Claude Code and OpenClaw were embedded in the operator’s day-to-day workflow, supporting troubleshooting, orchestration, and refinement of the collection pipeline. This AI-assisted workflow resulted in the modular platform Bissa scanner [&#8230;]</p>
+<p>The post <a href="https://thedfirreport.com/2026/04/22/bissa-scanner-exposed-ai-assisted-mass-exploitation-and-credential-harvesting/">Bissa Scanner Exposed: AI-Assisted Mass Exploitation and Credential Harvesting</a> appeared first on <a href="https://thedfirreport.com">The DFIR Report</a>.</p>
+]]></description>
+		
+		
+		
+		<post-id xmlns="com-wordpress:feed-additions:1">50133</post-id>	</item>
+</channel>
+</rss>

@@ -12,7 +12,9 @@ export type FeedSourceId =
     | "fortinet"
     | "cisco"
     | "aws"
-    | "gcp";
+    | "gcp"
+    | "dfir-report"
+    | "unit42";
 
 export const ALL_FEED_SOURCES: FeedSourceId[] = [
     "cisa-kev",
@@ -24,7 +26,12 @@ export const ALL_FEED_SOURCES: FeedSourceId[] = [
     "cisco",
     "aws",
     "gcp",
+    "dfir-report",
+    "unit42",
 ];
+
+/** Research publications: articles about observed attacks, not vendor advisories. */
+export const RESEARCH_SOURCES: FeedSourceId[] = ["dfir-report", "unit42"];
 
 export type Severity = "critical" | "high" | "medium" | "low" | "unknown";
 
@@ -45,6 +52,8 @@ export type Ioc = {
     value: string;
     /** The page the indicator was taken from. */
     source: string;
+    /** The source's own caution about using it, or a note that the list was capped. */
+    note?: string;
 };
 
 export type RawItem = {
@@ -69,6 +78,8 @@ export type RawItem = {
     iocs: Ioc[];
     /** True for KEV catalog entries. */
     kevListed: boolean;
+    /** True for research articles, whose claims are not vendor or CISA statements. */
+    research?: boolean;
 };
 
 export type Evaluation = {

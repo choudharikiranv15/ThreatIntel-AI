@@ -272,6 +272,7 @@ Every `feedIntervalHours`, the feed collects new advisories, rates each one agai
 | `msrc` | Microsoft Security Update Guide | First publications only. |
 | `paloalto`, `fortinet`, `cisco` | Vendor PSIRT feeds | |
 | `aws`, `gcp` | Cloud security bulletins | |
+| `dfir-report`, `unit42` | Research articles (The DFIR Report, Unit 42) | The source of most indicators. Each recent article's page is read at most once a day for its indicator section. |
 
 All sources are public. Each is fetched on its own with retries, so one failing source never blocks the others. A cycle where every source fails is recorded as failed, never as an empty success, and a page that answers 200 but is not a feed, such as a bot check, counts as a failure.
 
@@ -283,21 +284,30 @@ Fixed rules decide priority, and every item records why. A model never decides w
 |---|---|
 | P1 | Bio/Pharma relevance with exploitation or high/critical severity; or CISA-confirmed exploitation of an in-scope product, log source, or manufacturing OT system |
 | P2 | An in-scope security product with exploitation or high/critical severity; Bio/Pharma relevance at lower severity; reported exploitation of manufacturing OT |
-| P3 | An in-scope log source or platform with exploitation or high/critical severity; or CISA-confirmed exploitation of anything else |
+| P3 | An in-scope log source or platform with exploitation or high/critical severity; CISA-confirmed exploitation of anything else; or a research article that publishes indicators |
 | ignore | Everything else |
 
 - **Bio/Pharma relevance** needs an industry term (pharmaceutical, biotech, LIMS, clinical trial, GxP, and similar) or a configured Bio/Pharma product. "Healthcare" alone never qualifies, nor does CISA listing Healthcare among an ICS product's sectors.
 - **Exploitation:** `confirmed` means CISA KEV lists the CVE; `reported` means the source itself says so. Denials win ("not known to be actively exploited"), and "an attacker could exploit" is capability, not an attack. A bulletin bundling more than 10 third-party CVEs is not confirmed exploitation of its product because one of them is in KEV.
-- With the product and log-source lists empty, only Bio/Pharma items, exploited manufacturing OT, and CISA-confirmed exploitation are posted.
+- **Research articles** are matched against your scope by their title and summary only, never the page around the article. One that publishes indicators is at least P3, because indicators can be hunted whatever the scope; one without indicators or a scope match is ignored. An exploitation claim in a research article is recorded as unverified, since it is neither a vendor nor a CISA statement.
+- With the product and log-source lists empty, only Bio/Pharma items, exploited manufacturing OT, CISA-confirmed exploitation, and research articles with indicators are posted.
 
 ### Indicators
 
-Indicators come only from a source's own "Indicators of Compromise" section, exactly as published (including defanging such as `hxxp` and `[.]`), and are posted in code spans so Discord does not link them. Domains are taken only when defanged. Without an indicator section, the post says `No IOCs published in the source.` Vendor advisories rarely publish indicators; research articles with indicator parsers are planned.
+Indicators come only from a source's own "Indicators of Compromise" section, exactly as published (including defanging such as `hxxp` and `[.]`), and are posted in code spans so Discord does not link them. Domains are taken only when defanged. Without an indicator section, the post says `No IOCs published in the source.` Vendor advisories rarely publish indicators; research articles are where most come from.
+
+- A section ends at the next heading or at page furniture such as the footer or "Share this entry", so nothing after the article is read.
+- Links to the article's own site and to reference sites (GitHub, VirusTotal, MITRE, and similar) are not indicators.
+- When The DFIR Report's section links to its own indicator dataset on GitHub, that file is read too, and each indicator records the file as its source. No other repository is followed.
+- A source's own caution, such as "may be shared infrastructure, do not block directly", is posted with the indicators as a source note.
+- At most 500 indicators are kept per item, with a note giving the source's total. A post lists IPs, domains, and URLs first, then hashes, and says how many more are in the article.
+- If an article's page cannot be read, the item waits for the next cycle. It is never posted as having no indicators.
 
 ### Flood control
 
 - One advisory has one key across feeds, so CISA's two feeds never post it twice.
 - A CVE posted within `feedDedupeDays` is not posted again through another advisory unless the new one adds exploitation evidence or indicators, or covers CVEs not yet posted.
+- The same threat through another article is not posted again: an item whose indicators were nearly all posted already (80% or more) adds nothing to hunt, and an item with no CVE and no indicators is a repeat when its title is nearly the same.
 - A posted item is reposted, marked `(updated)`, only after a material change (exploitation rose, or new indicators), and only after `feedCooldownHours`, except newly confirmed P1 exploitation.
 - At most `feedMaxPostsPerCycle` posts per cycle, P1 first. The rest wait for later cycles until they are older than `feedMaxAgeDays`.
 

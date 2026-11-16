@@ -328,6 +328,43 @@ async function testQuietNotice(): Promise<void> {
     console.log("✓ Quiet cycles post one current notice with a concept; failed cycles stay silent");
 }
 
+async function testResearchItems(): Promise<void> {
+    await reset();
+
+    const iocs = [
+        { type: "ipv4" as const, value: "203.0.113[.]77", source: "https://example.test/a", note: "May be shared infrastructure." },
+        { type: "domain" as const, value: "bad-host[.]example", source: "https://example.test/a" },
+        { type: "sha256" as const, value: "a".repeat(64), source: "https://example.test/a" },
+    ];
+    const state = world();
+
+    state.items.cisco = [raw({ source: "dfir-report", itemKey: "dfir-report:intrusion-a", title: "Intrusion report: loader to ransomware", research: true, iocs })];
+
+    const first = await runFeedCycleIfDue(deps(state, { scope: { bioPharmaTerms: [], bioPharmaProducts: [], securityProducts: [], logSources: [] } }));
+    const [post] = await posts();
+
+    assert(first?.counts.selected === 1, `a research article with indicators is posted with empty scope lists: ${JSON.stringify(first?.counts)}`);
+    assert(
+        post.message.includes("`203.0.113[.]77`") && post.message.includes("`bad-host[.]example`") && /Source note: May be shared infrastructure/.test(post.message),
+        "the post carries the indicators exactly, and the source's caution",
+    );
+
+    const { rows: [stored] } = await db.query("SELECT iocs, priority FROM public.feed_items WHERE item_key = 'dfir-report:intrusion-a'");
+
+    assert(stored.priority === "P3" && stored.iocs.length === 3 && stored.iocs[0].source === "https://example.test/a", "indicators are stored with their source");
+
+    /* Another article about the same intrusion, with the same indicators. */
+    state.items.aws = [raw({ source: "unit42", itemKey: "unit42:intrusion-a", title: "Another look at the loader", research: true, iocs: iocs.slice(0, 2) })];
+    await makeDue();
+
+    const second = await runFeedCycleIfDue(deps(state));
+
+    assert(second?.counts.selected === 0 && second.counts.duplicatesSuppressed === 1, `the same threat is not posted twice: ${JSON.stringify(second?.counts)}`);
+    assert((await posts()).length === 1, "still one post");
+
+    console.log("✓ Research items post their indicators once per threat");
+}
+
 async function testProviderFailures(): Promise<void> {
     await reset();
 
@@ -495,6 +532,7 @@ async function main(): Promise<void> {
         await testLimitsAndQueue();
         await testEmptyCycle();
         await testQuietNotice();
+        await testResearchItems();
         await testProviderFailures();
         await testLeasesAndRecovery();
         await testDelivery();

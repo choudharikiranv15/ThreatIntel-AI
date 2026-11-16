@@ -1,0 +1,189 @@
+<!doctype html>
+<html><head><title>From Bing Search to Ransomware: Bumblebee and AdaptixC2 Deliver Akira - The DFIR Report</title></head><body>
+<h1>From Bing Search to Ransomware: Bumblebee and AdaptixC2 Deliver Akira - The DFIR Report</h1>
+<p>Article text omitted from this test fixture.</p>
+<h2 class="av-special-heading-tag toc-heading-text">Indicators</h2>
+</div>
+
+
+
+
+<h3 class="wp-block-heading">Atomic</h3>
+
+
+
+<pre class="wp-block-preformatted">opmanager[.]pro<br>download-center[.]online<br>ev2sirbd269o5j[.]org - BumbleBee<br>2rxyt8yrhq0bgj[.]org - BumbleBee<br>d1hmxkpwby0d4s[.]org - BumbleBee<br>yj6jurm5qqkye5[.]org - BumbleBee<br>ewujsfb1dp5ran[.]org - BumbleBee<br>8doj8uvx604eck[.]org - BumbleBee<br>kwywztxoo2xdot[.]org - BumbleBee<br>ky1d1p1daahe5t[.]org - BumbleBee<br>ovh1kn1tcqw5kp[.]org - BumbleBee<br>6cimu4mc085em8[.]org - BumbleBee<br>5ka8rxp6t6eup2[.]org - BumbleBee<br>ks501oz9nm3v05[.]org - BumbleBee<br>v5rjsdqogstopr[.]org - BumbleBee<br><br>192.121.22.94 - BumbleBee<br>109.205.195.211 - BumbleBee<br>188.40.187.145 - BumbleBee<br>171.22.183.43 - BumbleBee<br>194.127.178.21 - BumbleBee<br>172.96.137.160 - AdaptixC2<br>193.242.184.150 - Reverse SSH Tunnel<br>185.174.100.203 - Exfil Server<br></pre>
+
+
+
+<h3 class="wp-block-heading">Computed</h3>
+
+
+
+<pre class="wp-block-preformatted">ManageEngine-OpManager.msi<br>124a48b78060fa851e1cc077ca35713c<br>ab82bf27132323861810c0efcac6d5dd01600dd4<br>186b26df63df3b7334043b47659cba4185c948629d857d47452cc1936f0aa5da<br><br>msimg32.dll<br>ca8646dfc88423bb9fffda811160cebe<br>febbaf5f08a8e0782ffcce8beef1f2b4e249a52b<br>a6df0b49a5ef9ffd6513bfe061fb60f6d2941a440038e2de8a7aeb1914945331<br> <br>locker.exe<br>8c113b3aa82c81eee7c6b4ed0ba9a90f<br>d66944e1a57daf04d3e809f22cd01946d593acaf<br>de730d969854c3697fd0e0803826b4222f3a14efe47e4c60ed749fff6edce19d </pre>
+
+
+
+<div id="detections" class="toc-heading heading-post-alt-wrapper" data-toc-wrapper="true">
+    <h2 class="av-special-heading-tag toc-heading-text">Detections</h2>
+</div>
+
+
+
+
+<h3 class="wp-block-heading"><strong>Network</strong></h3>
+
+
+
+<pre class="wp-block-preformatted">2056726 : ET MALWARE BumbleBee Loader CnC Checkin
+2056727 : ET MALWARE BumbleBee Loader CnC Server Response
+2027174 : ET INFO Command Shell Activity Over SMB - Possible Lateral Movement
+2047702 : ET INFO External IP Lookup Domain (ipify .org) in DNS Lookup
+2047703 : ET INFO External IP Address Lookup Domain (ipify .org) in TLS SNI
+2027267 : ET INFO Possible Lateral Movement - File Creation Request in Remote System32 Directory
+2043343 : ET INFO RustDesk Domain in DNS Lookup
+2044076 : ET INFO RustDesk Relay Domain in DNS Lookup
+2025701 : ET INFO SMB2 NT Create AndX Request For an Executable File
+2025703 : ET INFO SMB2 NT Create AndX Request For an Executable File In a Temp Directory
+2027182 : ET INFO WMIC WMI Request Over SMB - Likely Lateral Movement
+2027189 : ET NETBIOS DCERPC DCOM ExecuteShellCommand Call
+2851485 : ETPRO INFO SMB/DCERPC Bind_ack with Big-Endian Assoc Group
+2851484 : ETPRO INFO SMB/DCERPC Bind_ack with Endian Flipped
+</pre>
+
+
+
+<h3 class="wp-block-heading">Sigma</h3>
+
+
+
+<p class="wp-block-paragraph">Search rules on&nbsp;<a href="https://detection.fyi/" rel="noreferrer noopener" target="_blank">detection.fyi</a>&nbsp;or&nbsp;<a href="https://sigmasearchengine.com/" rel="noreferrer noopener" target="_blank">sigmasearchengine.com</a></p>
+
+
+
+<p class="wp-block-paragraph"><a href="https://thedfirreport.com/products/detection-pack/" rel="noreferrer noopener" target="_blank">DFIR Report Private Ruleset</a>:</p>
+
+
+
+<pre class="wp-block-preformatted">410f5c82-1fec-42d0-9552-7d9d885517b2 : Veeam Credential Dumping via PostgreSQL psql
+637ab586-af22-4be2-9100-215952232f65 : DNS Zone Enumeration and Export via PowerShell
+e20f9b0e-b4af-40b7-8a9d-eaed7f61d4cd : LSASS Enumeration Followed by Memory Dump - Correlation Rule
+9c4034f6-d413-49e1-b257-419775a14736 : Multiple DGA DNS Queries - Correlation Rule
+</pre>
+
+
+
+<p class="wp-block-paragraph"><strong>Sigma Repo:</strong></p>
+
+
+
+<pre class="wp-block-preformatted">646ea171-dded-4578-8a4d-65e9822892e3 : Process Memory Dump Via Comsvcs.DLL<br>4ac1f50b-3bd0-4968-902d-868b4647937e : DPAPI Domain Backup Key Extraction<br>87df9ee1-5416-453a-8a08-e8d4a51e9ce1 : Delete Volume Shadow Copies Via WMI With PowerShell<br>05a2ab7e-ce11-4b63-86db-ab32e763e11d : MMC Spawning Windows Shell<br>fdb62a13-9a81-4e5c-a38f-ea93a16f6d7c : PowerShell Base64 Encoded FromBase64String Cmdlet<br>ca2092a1-c273-4878-9b4b-0d60115bf5ea : Suspicious Encoded PowerShell Command Line<br>b9d9cc83-380b-4ba3-8d8f-60c0e7e2930c : Suspicious PowerShell Encoded Command Patterns<br>8a582fe2-0882-4b89-a82a-da6b2dc32937 : Suspicious WmiPrvSE Child Process<br>c7c8aa1c-5aff-408e-828b-998e3620b341 : MSI Installation From Suspicious Locations<br>2aa0a6b4-a865-495b-ab51-c28249537b75 : Startup Folder File Write<br>8e0bb260-d4b2-4fff-bb8d-3f82118e6892 : Potentially Suspicious CMD Shell Output Redirect<br>178e615d-e666-498b-9630-9ed363038101 : Elevated System Shell Spawned From Uncommon Parent Location<br>61065c72-5d7d-44ef-bf41-6a36684b545f : Elevated System Shell Spawned<br>4f4eaa9f-5ad4-410c-a4be-bc6132b0175a : CMD Shell Output Redirect<br>a24e5861-c6ca-4fde-a93c-ba9256feddf0 : Uncommon Process Access Rights For Target Image<br>241e802a-b65e-484f-88cd-c2dc10f9206d : Read Contents From Stdin Via Cmd.EXE<br>d21374ff-f574-44a7-9998-4a8c8bf33d7d : WmiPrvSE Spawned A Process<br>502b42de-4306-40b4-9596-6f590c81f073 : Local Accounts Discovery<br>e28a5a99-da44-436d-b7a0-2afc20a5f413 : Whoami Utility Execution<br>bd8b828d-0dca-48e1-8a63-8a58ecf2644f : Group Membership Reconnaissance Via Whoami.EXE<br>0ef56343-059e-4cb6-adc1-4c3c967c5e46 : Suspicious Execution of Systeminfo<br>903076ff-f442-475a-b667-4f246bcc203b : Nltest.EXE Execution<br>5cc90652-4cbd-4241-aa3b-4b462fa5a248 : Potential Recon Activity Via Nltest.EXE<br>183e7ea8-ac4b-4c23-9aec-b3dac4e401ac : Net.EXE Execution<br>d95de845-b83c-4a9a-8a6a-4fc802ebf6c0 : Suspicious Group And Account Reconnaissance Activity Using Net.EXE<br>cd219ff3-fa99-45d4-8380-a7d15116c6dc : New User Created Via Net.EXE<br>8eef149c-bd26-49f2-9e5a-9b00e3af499b : Pass the Hash Activity 2<br>4d07b1f4-cb00-4470-b9f8-b0191d48ff52 : DNS Query To Remote Access Software Domain From Non-Browser App<br>fb843269-508c-4b76-8b8d-88679db22ce7 : Suspicious Execution of Powershell with Base64<br>692f0bec-83ba-4d04-af7e-e884a96059b6 : Potential WMI Lateral Movement WmiPrvSE Spawned PowerShell<br>d0d28567-4b9a-45e2-8bbc-fb1b66a1f7f6 : Unusually Long PowerShell CommandLine<br>42f595c8-7223-43b1-93d3-0349a851a535 : PowerShell Get-Process LSASS in ScriptBlock<br>5b768e71-86f2-4879-b448-81061cbae951 : Suspicious Manipulation Of Default Accounts Via Net.EXE<br><br></pre>
+
+
+
+<h3 class="wp-block-heading">YARA</h3>
+
+
+
+<pre class="wp-block-preformatted">AdaptixC2_listener_beacon_http<br>AdaptixC2_listener_beacon_http_var2<br>BumblebeeC2<br>CAPE_Bumblebee2024<br>DITEKSHEN_MALWARE_Win_Akira<br>MALPEDIA_Win_Bumblebee_Auto<br>Multi_Ransomware_Akira_21842eb3<br>SECUINFRA_SUSP_Powershell_Base64_Decode<br>SIGNATURE_BASE_MAL_WIN_Akira_Apr25<br>SIGNATURE_BASE_SUSP_PS1_JAB_Pattern_Jun22_1<br>SUSP_PS1_JAB_Pattern_Jun22_1<br>Windows_Ransomware_Akira_c8c298ba<br>Windows_Trojan_Adaptix_b2cda978<br>Windows_Trojan_Bumblebee_35f50bea<br>win_bumblebee_auto</pre>
+
+
+
+<div id="MITRE-ATT&amp;CK" class="toc-heading heading-post-alt-wrapper" data-toc-wrapper="true">
+    <h2 class="av-special-heading-tag toc-heading-text">MITRE ATT&amp;CK</h2>
+</div>
+
+
+
+<div class="wp-block-image">
+<figure class="aligncenter size-full"><a href="https://thedfirreport.com/wp-content/uploads/pr_36726_077.png"><img loading="lazy" decoding="async" width="1102" height="1881" src="https://thedfirreport.com/wp-content/uploads/pr_36726_077.png" alt="" class="wp-image-50312"/></a></figure>
+</div>
+
+
+<pre class="wp-block-preformatted">Create Account - T1136
+Credentials from Password Stores - T1555
+Data Encrypted for Impact - T1486
+Data from Network Shared Drive - T1039
+Distributed Component Object Model - T1021.003
+DLL - T1574.001
+Domain Account - T1087.002
+Domain Generation Algorithms - T1568.002
+Domain Groups - T1069.002
+Domain Trust Discovery - T1482
+Drive-by Compromise - T1189
+Exfiltration Over C2 Channel - T1041
+Exfiltration Over Symmetric Encrypted Non-C2 Protocol - T1048.001
+File and Directory Discovery - T1083
+Inhibit System Recovery - T1490
+Local Account - T1087.001
+Local Groups - T1069.001
+LSASS Memory - T1003.001
+Malicious File - T1204.002
+Masquerading - T1036
+Network Service Discovery - T1046
+Network Share Discovery - T1135
+NTDS - T1003.003
+PowerShell - T1059.001
+Process Injection - T1055
+Proxy - T1090
+Remote Access Tools - T1219
+Remote Desktop Protocol - T1021.001
+Remote System Discovery - T1018
+Service Execution - T1569.002
+System Information Discovery - T1082
+System Owner/User Discovery - T1033
+Web Protocols - T1071.001
+Windows Command Shell - T1059.003
+Windows Management Instrumentation - T1047
+Windows Service - T1543.003
+File Deletion - T1070.004
+Command Obfuscation - T1027.010 
+</pre>
+
+
+
+<p class="wp-block-paragraph">Internal case #TB36726 #PR40373</p>
+
+
+
+<p class="wp-block-paragraph"></p>
+						
+						<div class="av-share-box"><h5 class='av-share-link-description av-no-toc '>Share this entry</h5><ul class="av-share-box-list noLightbox"><li class='av-share-link av-social-link-facebook' ><a target="_blank" aria-label="Share on Facebook" href="https://www.facebook.com/sharer.php?u=https://thedfirreport.com/2026/06/29/from-bing-search-to-ransomware-bumblebee-and-adaptixc2-deliver-akira-3/&amp;t=From%20Bing%20Search%20to%20Ransomware%3A%20Bumblebee%20and%20AdaptixC2%20Deliver%20Akira" aria-hidden="false" data-av_icon="" data-av_iconfont="fa-fontello" title="" data-avia-related-tooltip="Share on Facebook" rel="noopener"><span class='avia_hidden_link_text'>Share on Facebook</span></a></li><li class='av-share-link av-social-link-x' ><a target="_blank" aria-label="Share on X" href="https://x.com/share?text=From%20Bing%20Search%20to%20Ransomware%3A%20Bumblebee%20and%20AdaptixC2%20Deliver%20Akira&amp;url=https://thedfirreport.com/?p=50310" aria-hidden="false" data-av_icon="" data-av_iconfont="fa-fontello" title="" data-avia-related-tooltip="Share on X" rel="noopener"><span class='avia_hidden_link_text'>Share on X</span></a></li><li class='av-share-link av-social-link-whatsapp' ><a target="_blank" aria-label="Share on WhatsApp" href="https://api.whatsapp.com/send?text=https://thedfirreport.com/2026/06/29/from-bing-search-to-ransomware-bumblebee-and-adaptixc2-deliver-akira-3/" aria-hidden="false" data-av_icon="" data-av_iconfont="entypo-fontello" title="" data-avia-related-tooltip="Share on WhatsApp" rel="noopener"><span class='avia_hidden_link_text'>Share on WhatsApp</span></a></li><li class='av-share-link av-social-link-linkedin' ><a target="_blank" aria-label="Share on Linkedin" href="https://linkedin.com/shareArticle?mini=true&amp;title=From%20Bing%20Search%20to%20Ransomware%3A%20Bumblebee%20and%20AdaptixC2%20Deliver%20Akira&amp;url=https://thedfirreport.com/2026/06/29/from-bing-search-to-ransomware-bumblebee-and-adaptixc2-deliver-akira-3/" aria-hidden="false" data-av_icon="" data-av_iconfont="fa-fontello" title="" data-avia-related-tooltip="Share on Linkedin" rel="noopener"><span class='avia_hidden_link_text'>Share on Linkedin</span></a></li><li class='av-share-link av-social-link-reddit' ><a target="_blank" aria-label="Share on Reddit" href="https://reddit.com/submit?url=https://thedfirreport.com/2026/06/29/from-bing-search-to-ransomware-bumblebee-and-adaptixc2-deliver-akira-3/&amp;title=From%20Bing%20Search%20to%20Ransomware%3A%20Bumblebee%20and%20AdaptixC2%20Deliver%20Akira" aria-hidden="false" data-av_icon="" data-av_iconfont="entypo-fontello" title="" data-avia-related-tooltip="Share on Reddit" rel="noopener"><span class='avia_hidden_link_text'>Share on Reddit</span></a></li><li class='av-share-link av-social-link-mail' ><a aria-label="Share by Mail" href="/cdn-cgi/l/email-protection#26195553444c4345521b6054494b031416644f484103141675434754454e031416524903141674474855494b5147544303156703141664534b444a4344434303141647484203141667424756524f5e651403141662434a4f504354031416674d4f5447000516151e1d4449425f1b4e525256551c0909524e4342404f545443564954520845494b091416141009161009141f094054494b0b444f48410b55434754454e0b52490b54474855494b514754430b44534b444a434443430b4748420b47424756524f5e45140b42434a4f5043540b474d4f54470b1509" aria-hidden='false' data-av_icon='' data-av_iconfont='fa-fontello' title='' data-avia-related-tooltip='Share by Mail'><span class='avia_hidden_link_text'>Share by Mail</span></a></li></ul></div>					</div>
+
+				</div><!-- .glossary-columns -->
+
+			</div><!-- .entry-content-wrapper -->
+		</div><!-- .content -->
+	</div><!-- .container -->
+</div><!-- .single-content-section -->
+
+	<div class="main_color related-posts-section section-before-footer">
+		<div class="container">
+			<div class="content">
+				<div class="ep-columns related-posts-header">
+					<div class="ep-columns-inner">
+						<div class="ep-column">
+							<div class="h3">
+								<div class="av-special-heading-tag">Related Reports</div>
+							</div>
+						</div>
+						<div class="ep-column">
+							<a href="https://thedfirreport.com/reports/" class="avia-button avia-icon_select-no avia-style-default avia-color-link avia-size-large avia-position-left">
+								<span class="avia_iconbox_title">View all</span>
+							</a>
+
+						</div>
+					</div>
+				</div>
+			<div  class='ep-posts-grid-container ep-grid-wrapper ep-space-small  '  ><div class='ep-posts-grid ep-grid  facetwp-template ep-grid-columns  is-variable  '><div class="ep-item ep-posts-grid-item  ep-post-grid-item ep-grid-column one-full-mobile one-half-tablet one-third  entry entry-50572 entry-post   ep-item-has-button " >
+    <div class="ep-item-inner   ">
+        
+            <div class="header-post-wrapper"> 
+                                <div class="post-tags">
+                    <div class='ep-post-tags'><a class='ep-item-term ep-item-term-scam' href='https://thedfirreport.com/category/scam/' >scam</a></div>
+                </div>
+                               
+            </div>
+      
+                        <div class="ep-item-media">
+</body></html>

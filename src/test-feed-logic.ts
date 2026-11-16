@@ -10,17 +10,20 @@ import path from "node:path";
 import { BUNDLE_LIMIT, evaluate, type ScopeConfig } from "./feed/classify.js";
 import { CONCEPTS } from "./feed/concepts.js";
 import { formatFeedPost, formatQuietNotice, NO_IOCS, POST_DIVIDER } from "./feed/format.js";
-import { extractIocs } from "./feed/iocs.js";
+import { extractIocs, extractIocsFromIndicatorFile, indicatorFileLinks, MAX_IOCS } from "./feed/iocs.js";
 import { HOW_TO_READ, summarizeFeed } from "./feed/tools.js";
 import { parseFeed } from "./feed/rss.js";
 import {
     DEFAULT_SELECTION,
+    sameThreat,
     selectForPublication,
+    titleSimilarity,
     type Candidate,
+    type RecentPost,
     type RecentCve,
     type SelectionConfig,
 } from "./feed/select.js";
-import { exploitationClaimIn, parseKev, parseSource, severityIn, withinWindow } from "./feed/sources.js";
+import { createSourceFetcher, enrichResearchItem, exploitationClaimIn, parseKev, parseSource, severityIn, withinWindow } from "./feed/sources.js";
 import type { EvaluatedItem, RawItem } from "./feed/types.js";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -250,8 +253,13 @@ function testPriorities(): void {
 
 const candidate = (item: EvaluatedItem, published: Candidate["published"] = null): Candidate => ({ item, published });
 
-function decide(candidates: Candidate[], config: Partial<SelectionConfig> = {}, recent = new Map<string, RecentCve>()) {
-    return selectForPublication(candidates, recent, { ...DEFAULT_SELECTION, ...config }, NOW);
+function decide(
+    candidates: Candidate[],
+    config: Partial<SelectionConfig> = {},
+    recent = new Map<string, RecentCve>(),
+    posts: RecentPost[] = [],
+) {
+    return selectForPublication(candidates, recent, { ...DEFAULT_SELECTION, ...config }, NOW, posts);
 }
 
 function testSelection(): void {
@@ -547,7 +555,182 @@ function testQuietNotice(): void {
     console.log("✓ The quiet notice is short, honest about coverage, and carries a vetted concept");
 }
 
-function main(): void {
+/* --------------------------- Research articles --------------------------- */
+
+const DFIR_URL = "https://thedfirreport.com/2026/06/29/example/";
+
+async function testResearch(): Promise<void> {
+    /* Feeds: title and summary only, marked as research. */
+    for (const [source, file] of [["dfir-report", "dfir-report.xml"], ["unit42", "unit42.xml"]] as const) {
+        const items = parseSource(source, fixture(file));
+
+        assert(items.length === 4, `${source} parses its recorded feed`);
+        assert(
+            items.every((item) => item.research && item.itemKey.startsWith(`${source}:`) && /^https:\/\//.test(item.url) && item.publishedAt && item.iocs.length === 0),
+            `${source} items are research items with a key, link, and date; indicators come from the article`,
+        );
+    }
+
+    /* The DFIR Report "Indicators" section: exact values, including plain IPs. */
+    const dfir = extractIocs(fixture("dfir-report-article-indicators.html"), DFIR_URL);
+    const count = (type: string, list = dfir) => list.filter((ioc) => ioc.type === type).length;
+
+    assert(count("domain") === 15 && count("ipv4") === 8 && count("sha256") === 3 && count("sha1") === 3 && count("md5") === 3, `the indicator section is read in full: ${dfir.length}`);
+    assert(dfir.some((ioc) => ioc.value === "opmanager[.]pro") && dfir.some((ioc) => ioc.value === "192.121.22.94"), "values are kept exactly as published");
+    assert(dfir[0].type === "ipv4" && dfir.at(-1)?.type === "md5", "the most huntable types come first");
+
+    /* A section at the end of the page stops at the page furniture, and keeps the source's caution. */
+    const footer = extractIocs(fixture("dfir-report-article-footer.html"), DFIR_URL);
+
+    assert(count("url", footer) === 11 && footer.every((ioc) => !ioc.value.includes("thedfirreport.com")), `the site's own links are never indicators: ${footer.filter((ioc) => ioc.type === "url").map((ioc) => ioc.value).join(" ")}`);
+    assert(footer.every((ioc) => /shared SaaS infrastructure/.test(ioc.note ?? "")), "the source's caution about its indicators is kept");
+    assert(/-# Source note: .*shared SaaS infrastructure/.test(formatFeedPost({ ...evaluated({ title: "Flash Alert" }), iocs: footer })), "and shown in the post");
+
+    /* Unit 42: defanged domains and hashes. */
+    const unit42 = extractIocs(fixture("unit42-article.html"), "https://unit42.paloaltonetworks.com/x/");
+
+    assert(count("domain", unit42) === 5 && count("sha256", unit42) === 21 && unit42.some((ioc) => ioc.value === "fonts.chrorne[.]com"), "Unit 42 indicator sections are read");
+
+    /* An indicator section that only links to the source's GitHub dataset. */
+    const github = fixture("dfir-report-article-github.html");
+
+    assert(extractIocs(github, DFIR_URL).length === 0, "a link to GitHub is a reference, not an indicator");
+
+    const links = indicatorFileLinks(github);
+
+    assert(
+        links.length === 1 && links[0].startsWith("https://raw.githubusercontent.com/The-DFIR-Report/DFIR-Report-Indicators/main/"),
+        `the source's own indicator file is followed: ${links}`,
+    );
+    assert(indicatorFileLinks('<h2>Indicators</h2><p>https://github.com/someone-else/iocs/blob/main/list.md</p>').length === 0, "only trusted indicator repositories are followed");
+
+    const file = extractIocsFromIndicatorFile(fixture("dfir-report-indicators.md"), links[0]);
+
+    assert(file.length === 179 && file.every((ioc) => ioc.type === "domain" && ioc.source === links[0]), `the indicator file is read line by line, with its own URL as the source: ${file.length}`);
+    assert(file.some((ioc) => ioc.value === "stats.us3.org"), "plain domains count inside a dedicated indicator file");
+    assert(extractIocsFromIndicatorFile("# Notes\nexample.com\n203.0.113.9\n", "x").length === 0, "values outside code blocks are never indicators");
+
+    /* Section boundaries and reference links, on a page built to contain each trap. */
+    const traps = extractIocs(
+        [
+            "<h2>Indicators</h2>",
+            "<p>hxxps://evil[.]example/payload and https://thedfirreport.com/services/ for more.</p>",
+            "<p>Rules: https://github.com/example/rules and https://www.virustotal.com/gui/file/abc</p>",
+            "<h5>Share this entry</h5><p>share-site[.]example</p>",
+            "<footer><p>footer-host[.]example</p></footer>",
+        ].join("\n"),
+        DFIR_URL,
+    ).map((ioc) => ioc.value);
+
+    assert(JSON.stringify(traps) === JSON.stringify(["hxxps://evil[.]example/payload"]), `only the real indicator survives: ${traps.join(", ")}`);
+
+    const afterFooter = extractIocs("<h2>Indicators of Compromise</h2><p>bad[.]example</p><footer><p>footer-host[.]example</p></footer>", DFIR_URL).map((ioc) => ioc.value);
+
+    assert(JSON.stringify(afterFooter) === JSON.stringify(["bad[.]example"]), `the page footer is never part of the section: ${afterFooter.join(", ")}`);
+
+    const ownSite = extractIocs("<h2>Indicators</h2><p>https://thedfirreport.com/contact/ https://cdn.thedfirreport.com/x hxxp://c2[.]example/a</p>", DFIR_URL).map((ioc) => ioc.value);
+
+    assert(JSON.stringify(ownSite) === JSON.stringify(["hxxp://c2[.]example/a"]), `links to the article's own site are not indicators: ${ownSite.join(", ")}`);
+
+    const huge = extractIocsFromIndicatorFile("```\n" + Array.from({ length: MAX_IOCS + 100 }, (_, index) => `host${index}.example.org`).join("\n") + "\n```\n", "x");
+
+    assert(huge.length === MAX_IOCS && huge.every((ioc) => new RegExp(`lists ${MAX_IOCS + 100} indicators`).test(ioc.note ?? "")), "a very long list is capped, and says how many the source lists");
+
+    /* Enrichment: the article and its indicator file together. */
+    const [first] = parseSource("dfir-report", fixture("dfir-report.xml"));
+    const enriched = await enrichResearchItem(first, async (url) =>
+        url.includes("raw.githubusercontent.com") ? fixture("dfir-report-indicators.md") : github,
+    );
+
+    assert(enriched.iocs.length === 179 && enriched.url === first.url, "an article's indicators include its linked dataset");
+
+    /* Priority: indicators make a research article worth posting; without them it is not. */
+    const withIocs = evaluated({ title: "Intrusion report", research: true, iocs: dfir }, EMPTY);
+    const without = evaluated({ title: "Opinion piece on AI", research: true }, EMPTY);
+
+    assert(withIocs.priority === "P3" && withIocs.confidence === "high" && withIocs.reasons.some((reason) => /publishing 32 indicators/.test(reason)), `a research article with indicators is P3: ${withIocs.priority}`);
+    assert(without.priority === "ignore", "a research article without indicators or scope is not posted");
+
+    const claimed = evaluated({ title: "FortiGate intrusion", research: true, exploitationClaim: "reported", iocs: dfir });
+
+    assert(claimed.reasons.some((reason) => /unverified/.test(reason)), "a research article's exploitation claim is labelled unverified");
+    assert(evaluated({ title: "pharmaceutical firm breached", research: true, exploitationClaim: "reported", iocs: dfir }).priority === "P1", "scope rules still raise research items");
+
+    /* Same threat through another article: nothing new to hunt, so no second post. */
+    const posted: RecentPost[] = [{
+        itemKey: "dfir-report:akira",
+        title: "From Bing Search to Ransomware: Bumblebee and AdaptixC2 Deliver Akira",
+        publishedAt: "2026-11-13T00:00:00.000Z",
+        iocValues: new Set(dfir.map((ioc) => ioc.value.toLowerCase())),
+    }];
+
+    const repeat = evaluated({ itemKey: "unit42:akira", title: "Akira ransomware via Bumblebee", research: true, iocs: dfir.slice(0, 20) }, EMPTY);
+
+    assert(sameThreat(repeat, posted, NOW, DEFAULT_SELECTION)?.itemKey === "dfir-report:akira", "an article whose indicators were already posted is the same threat");
+    assert(decide([candidate(repeat)], {}, new Map(), posted).get("unit42:akira")?.kind === "suppress", "and is not posted again");
+
+    const fresh = { ...repeat, iocs: [...dfir.slice(0, 5), ...unit42] };
+
+    assert(decide([candidate(fresh)], {}, new Map(), posted).get("unit42:akira")?.kind === "publish", "new indicators are new hunting value");
+
+    const sameTitle = evaluated({ itemKey: "x:1", title: "Bumblebee and AdaptixC2 Deliver Akira: From Bing Search to Ransomware", severity: "critical", products: ["FortiGate"] });
+
+    assert(decide([candidate(sameTitle)], {}, new Map(), posted).get("x:1")?.kind === "suppress", "without a CVE or indicators, a near-identical title is the same threat");
+    assert(titleSimilarity("BengalSEO Part 1: Anatomy of the Operation", "BengalSEO Part 2: Following the Money") < 0.7, "a series' next part is not a duplicate");
+    assert(titleSimilarity("FortiGate SSL-VPN heap overflow", "Entra ID token validation flaw") === 0, "unrelated titles do not match");
+
+    const old = [{ ...posted[0], publishedAt: "2026-10-01T00:00:00.000Z" }];
+
+    assert(decide([candidate(repeat)], {}, new Map(), old).get("unit42:akira")?.kind === "publish", "outside the dedupe window, the threat may be posted again");
+
+    /* Two research articles in one cycle with the same indicators: one post. */
+    const twin = { ...repeat, itemKey: "dfir-report:twin", iocs: dfir };
+    const both = decide([candidate(twin), candidate(repeat)]);
+
+    assert([...both.values()].filter((d) => d.kind === "publish").length === 1 && [...both.values()].some((d) => d.kind === "suppress"), "one threat, one post, even within a cycle");
+
+    /* An article page that cannot be read: the item waits, it is not posted without indicators. */
+    const realFetch = globalThis.fetch;
+    const feed = fixture("dfir-report.xml").replace(/<pubDate>[^<]*<\/pubDate>/g, `<pubDate>${new Date().toUTCString()}</pubDate>`);
+    let failing = 1;
+
+    globalThis.fetch = (async (input: string | URL | Request) => {
+        const url = String(input);
+
+        if (url.endsWith("/feed/")) return new Response(feed, { status: 200 });
+        if (url.includes("raw.githubusercontent.com")) return new Response(fixture("dfir-report-indicators.md"), { status: 200 });
+
+        failing -= 1;
+
+        return failing >= 0 ? new Response("down", { status: 503 }) : new Response(fixture("dfir-report-article-indicators.html"), { status: 200 });
+    }) as typeof fetch;
+
+    try {
+        const options = { timeoutMs: 2000, retry: { attempts: 1, maxDelayMs: 1, budgetMs: 1 }, since: () => new Date(Date.now() - 86_400_000), kevCatalog: async () => ({ catalog: {} }) };
+        const partial = await createSourceFetcher(options)("dfir-report");
+
+        assert(partial.length === 3 && partial.every((item) => item.iocs.length > 0), `an unreadable article is left out and the rest are read: ${partial.length}`);
+
+        failing = 99;
+
+        let threw = false;
+
+        try {
+            await createSourceFetcher(options)("dfir-report");
+        } catch {
+            threw = true;
+        }
+
+        assert(threw, "when no article can be read, the source counts as failed");
+    } finally {
+        globalThis.fetch = realFetch;
+    }
+
+    console.log("✓ Research articles add real indicators, keep source cautions, and are posted once per threat");
+}
+
+async function main(): Promise<void> {
+    await testResearch();
     testQuietNotice();
     testStatusSummary();
     testParsing();
@@ -560,10 +743,8 @@ function main(): void {
     console.log("Threat feed logic tests PASSED");
 }
 
-try {
-    main();
-} catch (error) {
+main().catch((error) => {
     console.error("Threat feed logic tests FAILED");
     console.error(error);
     process.exitCode = 1;
-}
+});
