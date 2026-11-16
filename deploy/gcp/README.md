@@ -20,12 +20,22 @@ gcloud compute instances create threatintel-gateway `
 
 The free tier covers one e2-micro only in `us-west1`, `us-central1`, or `us-east1`, with a standard (not SSD) disk of up to 30 GB. Check the current terms on [cloud.google.com/free](https://cloud.google.com/free), and set a small budget alert under **Billing > Budgets & alerts** so any unexpected charge, such as for the external IP address, is reported to you.
 
-No inbound ports are needed: Discord, Supabase, and the advisory feeds are all outbound connections. Leave only SSH open.
+No inbound ports are needed: Discord, Supabase, and the advisory feeds are all outbound connections. Allow SSH only through Google's Identity-Aware Proxy, so it is never open to the internet, and remove the default rules that open SSH and RDP to everyone:
+
+```powershell
+gcloud services enable iap.googleapis.com
+gcloud compute firewall-rules create allow-ssh-from-iap --network=default --direction=INGRESS --action=ALLOW --rules=tcp:22 --source-ranges=35.235.240.0/20
+# Confirm SSH through IAP works before removing the open rules.
+gcloud compute ssh threatintel-gateway --zone=us-central1-a --tunnel-through-iap --command="echo ok"
+gcloud compute firewall-rules delete default-allow-ssh default-allow-rdp
+```
+
+Every `gcloud compute ssh` and `scp` below then needs `--tunnel-through-iap`.
 
 ## 2. Prepare the VM
 
 ```powershell
-gcloud compute ssh threatintel-gateway --zone=us-central1-a
+gcloud compute ssh threatintel-gateway --zone=us-central1-a --tunnel-through-iap
 ```
 
 On the VM:
@@ -44,7 +54,7 @@ From the repository folder in PowerShell:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File deploy\gcp\export-state.ps1
-gcloud compute scp "$env:USERPROFILE\openclaw-state.tgz" threatintel-gateway:~/ --zone=us-central1-a
+gcloud compute scp "$env:USERPROFILE\openclaw-state.tgz" threatintel-gateway:openclaw-state.tgz --zone=us-central1-a --tunnel-through-iap
 Remove-Item "$env:USERPROFILE\openclaw-state.tgz"
 ```
 
@@ -111,6 +121,24 @@ gcloud functions logs read budget-cap --gen2 --region=us-central1 --project=$p -
 ```
 
 The log should say `DRY RUN: spend 150.0 reached budget 100.0; would disable billing`.
+
+## Security settings
+
+The gateway is reachable by everyone in your Discord server, and OpenClaw's defaults are designed for a single trusted user. Apply these settings after the install; `openclaw security audit` should then report no runtime or file-system tools exposed.
+
+```bash
+# Deny by default: only this plugin's tools and web fetch/search.
+openclaw config set tools.profile '"minimal"' --strict-json
+openclaw config set tools.alsoAllow '["threatintel-ai-engine","web_fetch","web_search"]' --strict-json
+openclaw config set tools.deny '["group:runtime","group:fs","group:sessions","group:automation","group:nodes","group:ui","skill_workshop","cron"]' --strict-json
+openclaw config set tools.exec '{"security":"deny","ask":"off"}' --strict-json
+openclaw config set gateway.controlUi.allowInsecureAuth false --strict-json
+openclaw gateway restart
+```
+
+Connect to the database as the least-privilege role from `db/migrations/004_app_role.sql`, not Supabase's `postgres` role, and harden SSH with a drop-in such as `/etc/ssh/sshd_config.d/60-hardening.conf` (`PermitRootLogin no`, `X11Forwarding no`, `MaxAuthTries 3`), checked with `sudo sshd -t` before `sudo systemctl reload ssh`.
+
+To replace a secret without it appearing on screen or in shell history: `bash ~/ThreatIntel-AI/deploy/gcp/rotate-secret.sh discord|nvd|db|openrouter`.
 
 ## Everyday operations
 

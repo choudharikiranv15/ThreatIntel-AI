@@ -62,7 +62,7 @@ $size = [math]::Round((Get-Item $archive).Length / 1MB, 1)
 Write-Host ""
 Write-Host "Done: $archive ($size MB)."
 Write-Host "It contains secrets. Copy it to the VM over SSH, for example:"
-Write-Host "  gcloud compute scp `"$archive`" threatintel-gateway:~/ --zone=us-central1-a"
+Write-Host "  gcloud compute scp `"$archive`" threatintel-gateway:openclaw-state.tgz --zone=us-central1-a --tunnel-through-iap"
 Write-Host "then delete it here."
 Write-Host ""
 Write-Host "To move back to this PC instead: Enable-ScheduledTask -TaskName '$taskName'; openclaw gateway restart"
