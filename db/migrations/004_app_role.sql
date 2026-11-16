@@ -7,16 +7,30 @@
 
 BEGIN;
 
+-- Plain LOGIN: PostgreSQL's defaults are no superuser, no role or database
+-- creation, no replication, and no row-level-security bypass. The attributes
+-- are not spelled out because Supabase's postgres role is not a superuser, and
+-- only a superuser may name the SUPERUSER attribute, even to deny it.
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'threatintel_app') THEN
-        CREATE ROLE threatintel_app WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+        CREATE ROLE threatintel_app WITH LOGIN;
     END IF;
 END
 $$;
 
--- In case the role existed with wider rights.
-ALTER ROLE threatintel_app WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+-- A role that already existed must not carry wider rights: stop rather than continue.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_roles
+        WHERE rolname = 'threatintel_app'
+          AND (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolreplication)
+    ) THEN
+        RAISE EXCEPTION 'threatintel_app has elevated attributes; remove them before applying this migration';
+    END IF;
+END
+$$;
 
 GRANT USAGE ON SCHEMA public TO threatintel_app;
 
