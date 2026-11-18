@@ -1,14 +1,15 @@
 # ThreatIntel AI
 
-An evidence-first threat intelligence plugin for [OpenClaw](https://github.com/openclaw/openclaw). It gives a Discord bot three capabilities for a SOC:
+An evidence-first threat intelligence plugin for [OpenClaw](https://github.com/openclaw/openclaw). It gives a Discord bot four capabilities for a SOC:
 
 - **CVE investigation.** Retrieves NVD, CISA KEV, Red Hat, and OSV evidence, compares the sources, and returns facts that each trace back to retrieved evidence.
 - **CVE watchlist.** Re-investigates chosen CVEs on a schedule and alerts a Discord channel when their intelligence actually changes.
-- **Threat feed.** Every 3 hours, collects advisories from CISA and major vendors, prioritises them for a Bio/Pharma SOC, and posts only what is worth hunting.
+- **Threat feed.** Every 3 hours, collects advisories from CISA, major vendors, and research publications, prioritises them for a Bio/Pharma SOC, and posts only what is worth hunting.
+- **Indicator lookup.** Checks an IP address, domain, or file hash against AbuseIPDB, GreyNoise, Shodan InternetDB, and AlienVault OTX.
 
 The model is the reasoning layer, never the source of truth. Every fact comes from a retrieved source, a deterministic check compares the model's answer with that evidence before it is sent, and nothing is invented: no MITRE ATT&CK mappings, detection claims, or indicators that a source did not publish.
 
-**Version 0.6.** Pinned to OpenClaw 2026.7.1-2.
+**Version 0.7.** Pinned to OpenClaw 2026.7.1-2.
 
 ## Contents
 
@@ -20,6 +21,8 @@ The model is the reasoning layer, never the source of truth. Every fact comes fr
 - [Answer checking](#answer-checking)
 - [Watchlist](#watchlist)
 - [Threat feed](#threat-feed)
+- [Indicator lookup](#indicator-lookup)
+- [Security](#security)
 - [Deployment](#deployment)
 - [Testing and CI](#testing-and-ci)
 - [Project layout](#project-layout)
@@ -58,6 +61,7 @@ flowchart LR
 | `threatintel_watch_status` | Owner | Delivery counts, recent alerts with message IDs; can re-queue failed alerts. |
 | `threatintel_feed_status` | Owner | Last and next feed cycle, per-run counts, source outcomes, recent posts. |
 | `threatintel_feed_run_now` | Owner | Make the next feed cycle due immediately. |
+| `threatintel_lookup_indicator` | Everyone | Reputation and exposure of one IP, domain, or file hash. Limited per person and per service. |
 
 "Owner" means a sender listed in OpenClaw's `commands.ownerAllowFrom`. The flag comes from OpenClaw, never from the model's arguments, so a prompt cannot grant itself access. Everyone else gets `owner_only`, including for the read-only tools.
 
@@ -86,15 +90,17 @@ For a new database, apply `db/schema.sql`, then every file in `db/migrations/` i
 | `001_evidence_integrity.sql` | Evidence hashes, replay support | v0.3. Without it, investigations are not saved. |
 | `002_watchlist.sql` | `watchlist`, `watch_events` | v0.5, to use the watchlist |
 | `003_threat_feed.sql` | Feed tables; a `channel` column on `watch_events` | v0.6. Without it, watch alerts fail as well as the feed. |
+| `004_app_role.sql` | `threatintel_app`, a least-privilege role for the plugin | Recommended for every deployment; see [Security](#security). |
+| `005_indicator_lookups.sql` | `indicator_lookups`: lookup cache, quota ledger, and audit trail | v0.7, for indicator lookups |
 
-Each migration runs in one transaction and enables row-level security with no policies, which blocks Supabase's `anon` and `authenticated` Data API roles while the table owner the plugin connects as keeps access.
+Each migration runs in one transaction and enables row-level security. Only the plugin's own role gets a policy, so Supabase's `anon` and `authenticated` Data API roles see no rows.
 
 The plugin connects with these environment variables. On a systemd host, put them in `~/.openclaw/.env`, which the gateway loads.
 
 | Variable | Notes |
 |---|---|
 | `THREATINTEL_DB_HOST`, `THREATINTEL_DB_PORT`, `THREATINTEL_DB_NAME`, `THREATINTEL_DB_USER`, `THREATINTEL_DB_PASSWORD` | Required |
-| `THREATINTEL_DB_SSL` | Remote connections use TLS by default without verifying the certificate. `verify-full` verifies it; `disable` turns TLS off. |
+| `THREATINTEL_DB_SSL` | Remote connections use TLS by default without verifying the certificate. Set `verify-full` in production; `disable` turns TLS off. |
 | `THREATINTEL_DB_SSL_CA` | Path to your provider's CA file, for `verify-full` |
 
 ### 3. Install into OpenClaw
@@ -166,6 +172,20 @@ All settings live under `plugins.entries.threatintel-ai-engine.config`. Lists ar
 | `feedUrgentBypass` | `true` | Let new P1 items with confirmed exploitation exceed the per-cycle limit. |
 | `feedUrgentMaxPerCycle` | `2` | Most urgent posts above the limit. |
 | `feedQuietNotice` | `true` | Post a short notice with a security concept when a cycle has nothing to post. |
+
+### Indicator lookup
+
+| Field | Default | Meaning |
+|---|---|---|
+| `abuseipdbApiKey` | none | AbuseIPDB key. Without it, AbuseIPDB is reported as not checked. |
+| `greynoiseApiKey` | none | Optional; the GreyNoise community API works without a key at a lower limit. |
+| `otxApiKey` | none | Optional; OTX works without a key at a lower limit. |
+| `lookupSources` | all | Enabled services: `internetdb`, `greynoise`, `abuseipdb`, `otx`. |
+| `lookupCacheHours` | `12` | How long an answer is reused before the service is asked again. |
+| `lookupPerUserPerHour` | `20` | Most lookups one person may start per hour. |
+| `lookupDailyBudgets` | internetdb 2000, greynoise 50, abuseipdb 900, otx 1000 | Most calls per service per UTC day. |
+
+Add a key without it appearing on screen: `bash ~/ThreatIntel-AI/deploy/gcp/rotate-secret.sh abuseipdb` (also `greynoise`, `otx`).
 
 ## CVE investigation
 
@@ -347,6 +367,37 @@ The National Vulnerability Database is the U.S. government's public catalogue of
 
 Concepts come from a reviewed list in `src/feed/concepts.ts`, in order, and are never generated at run time. If every source failed, no notice is posted, because "no new feed" would be untrue; if some failed, the notice says how many. A notice not delivered before the next cycle is dropped, never sent late. Set `feedQuietNotice` to `false` for a channel that stays silent when there is nothing to post.
 
+## Indicator lookup
+
+`threatintel_lookup_indicator` takes one IPv4 address, domain, or file hash. Defanged input such as `194.127.178[.]21` or `hxxp://evil[.]com` is accepted, and a URL is looked up by its host only.
+
+| Service | Covers | Key |
+|---|---|---|
+| Shodan InternetDB | IP: open ports, hostnames, known vulnerabilities | None |
+| GreyNoise | IP: internet-wide scanner or known common service | Optional |
+| AbuseIPDB | IP: abuse reports and confidence score | Required |
+| AlienVault OTX | IP, domain, hash: community threat reports and known false positives | Optional |
+
+- **Nothing private leaves the gateway.** Private, loopback, link-local (including the cloud metadata address), shared, multicast, documentation, and reserved IPv4 ranges, and internal names such as `.local`, `.internal`, and `.corp`, are refused before any request. IPv6 is not supported yet.
+- **Results are evidence, not verdicts.** The summary keeps threat reports (AbuseIPDB reports, OTX reports, GreyNoise "malicious"), exposure data (open ports, which show what is reachable, not that it is malicious), and known-benign markers (GreyNoise common services, OTX accepted false positives, the AbuseIPDB allowlist) apart, and names every service that was not checked and why.
+- **No record is not safe.** A service with no record is reported as "no reports", never "safe" or "clean". The answer gate flags an answer that calls an indicator safe without a known-benign marker, describes a result from a service that was not checked, or misquotes an AbuseIPDB score or report count or an OTX report count.
+- **Untrusted text.** OTX report names and tags are written by the community and are marked untrusted in the result.
+- **Limits.** Each person may start `lookupPerUserPerHour` lookups an hour; the requester comes from OpenClaw, never from the model's arguments. Each service has a daily budget; answers within `lookupCacheHours` are reused and do not use it. Failures are never cached.
+- **Keys** are sent only in request headers and never appear in URLs, errors, or results.
+- **Record.** Every lookup is stored in `indicator_lookups` with the service, status, and time, for 90 days, so you can see what was sent where.
+
+## Security
+
+The bot is reachable by everyone in your Discord server, so the deployment is locked down rather than relying on OpenClaw's single-user defaults:
+
+- **Tools.** The tool profile is `minimal`, allowing only this plugin's tools and web fetch and search. Shell, file, session, automation, node, and UI tools are denied, and exec is denied by policy as a second layer. See [deploy/gcp](deploy/gcp/README.md#security-settings).
+- **Database.** The plugin connects as `threatintel_app` (migration 004), which can read and write the plugin's tables only: no other schemas, no DDL, no role management, and no row-level-security bypass. The append-only triggers that protect evidence cannot be disabled by it. TLS is verified with `THREATINTEL_DB_SSL=verify-full` and the provider's CA.
+- **Network.** SSH is reachable only through Google's Identity-Aware Proxy, with key-only login and no root login. The gateway listens on localhost only.
+- **Secrets** live in `~/.openclaw` with owner-only permissions and are replaced with `deploy/gcp/rotate-secret.sh`, which never shows them.
+- **Repository.** `main` cannot be force-pushed or deleted; secret scanning, push protection, and Dependabot are on. OpenClaw stays pinned: do not merge a Dependabot update to it without running the delivery contract test.
+
+Check regularly: `openclaw security audit` (no runtime or file-system tools should be exposed), `gcloud compute firewall-rules list` (only IAP SSH, ICMP, and internal), and the bot's session logs for any `exec` or `read` calls (there should be none).
+
 ## Deployment
 
 ### Always-on host
@@ -384,7 +435,7 @@ npm run test:live      # calls the live NVD, CISA, Red Hat, and OSV APIs
 ```
 
 - `npm test` includes the plugin contract test, which runs the real plugin entry offline, and an OpenClaw delivery contract test that fails if OpenClaw is not the pinned version or stops honouring `skipQueue`.
-- Feed tests parse recorded copies of every real feed in `test-fixtures/feed/`.
+- Feed tests parse recorded copies of every real feed in `test-fixtures/feed/`, and lookup tests parse recorded service answers in `test-fixtures/lookup/` (AbuseIPDB and two GreyNoise cases follow each service's documented format, since they need a key or a matching address to record).
 - The regression case is `CVE-2024-3094`: `confirmed` status, CVSS 10 CRITICAL, KEV `not-listed`.
 
 GitHub Actions runs `npm test`, plugin validation, and `npm run test:database` against a real PostgreSQL 17 service on every push and pull request.
@@ -401,9 +452,10 @@ src/
   persistence/       PostgreSQL storage, history, comparison, replay
   watch/             Watchlist, shared background service, outbox delivery
   feed/              Threat feed: sources, classification, IOCs, selection
+  lookup/            Indicator lookup: input handling, services, limits
 db/                  Schema and migrations
 deploy/gcp/          Google Cloud deployment and spending cap
-test-fixtures/feed/  Recorded feed samples for tests
+test-fixtures/        Recorded feed and lookup samples for tests
 ```
 
 ## Design rules
