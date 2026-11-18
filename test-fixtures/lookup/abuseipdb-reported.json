@@ -1,0 +1,19 @@
+{
+  "_fixture": "AbuseIPDB's documented example response for GET /api/v2/check (abuseipdb.com/api). Not recorded live: the API requires a key.",
+  "data": {
+    "ipAddress": "118.25.6.39",
+    "isPublic": true,
+    "ipVersion": 4,
+    "isWhitelisted": false,
+    "abuseConfidenceScore": 100,
+    "countryCode": "CN",
+    "usageType": "Data Center/Web Hosting/Transit",
+    "isp": "Tencent Cloud Computing (Beijing) Co. Ltd",
+    "domain": "tencent.com",
+    "hostnames": [],
+    "isTor": false,
+    "totalReports": 1,
+    "numDistinctUsers": 1,
+    "lastReportedAt": "2018-12-20T20:55:14+00:00"
+  }
+}

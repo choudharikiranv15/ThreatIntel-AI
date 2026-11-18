@@ -5,6 +5,7 @@
 #
 #   bash rotate-secret.sh discord      # new Discord bot token
 #   bash rotate-secret.sh nvd          # new NVD API key
+#   bash rotate-secret.sh abuseipdb    # AbuseIPDB key for indicator lookups (also greynoise, otx)
 #   bash rotate-secret.sh db           # new password for the plugin's database role
 #   bash rotate-secret.sh openrouter   # new OpenRouter key (OpenClaw's own prompt)
 set -euo pipefail
@@ -68,15 +69,16 @@ if (config.channels?.discord && "token" in config.channels.discord) {
         unset token
         restart
         ;;
-    nvd)
+    nvd|abuseipdb|greynoise|otx)
+        field=$(case "$1" in nvd) echo nvdApiKey;; abuseipdb) echo abuseipdbApiKey;; greynoise) echo greynoiseApiKey;; otx) echo otxApiKey;; esac)
         backup "$S/openclaw.json"
-        ask "New NVD API key" | node -e '
+        ask "New $1 API key" | node -e '
 const fs = require("fs");
-const file = process.argv[1];
+const [file, field] = process.argv.slice(1);
 const config = JSON.parse(fs.readFileSync(file, "utf8"));
-config.plugins.entries["threatintel-ai-engine"].config.nvdApiKey = fs.readFileSync(0, "utf8");
+config.plugins.entries["threatintel-ai-engine"].config[field] = fs.readFileSync(0, "utf8");
 fs.writeFileSync(file, JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
-' "$S/openclaw.json"
+' "$S/openclaw.json" "$field"
         restart
         ;;
     db)
@@ -94,7 +96,7 @@ fs.writeFileSync(file, JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
         restart
         ;;
     *)
-        sed -n '2,9p' "$0"
+        sed -n '2,10p' "$0"
         exit 1
         ;;
 esac

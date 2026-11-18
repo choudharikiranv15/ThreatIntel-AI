@@ -1,0 +1,11 @@
+{
+  "_fixture": "GreyNoise Community API documented response shape for a known common service (RIOT). Not recorded live.",
+  "ip": "1.1.1.1",
+  "noise": false,
+  "riot": true,
+  "classification": "benign",
+  "name": "Cloudflare Public DNS",
+  "link": "https://viz.greynoise.io/riot/1.1.1.1",
+  "last_seen": "2026-11-17",
+  "message": "Success"
+}

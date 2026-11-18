@@ -189,6 +189,22 @@ async function main(): Promise<void> {
 
     assert(feedRun.json.status === "not_scheduled", "a disabled feed is never scheduled");
 
+    /* Indicator lookups are for everyone, and private addresses never leave the gateway. */
+    const lookupTool = stranger.get("threatintel_lookup_indicator");
+
+    assert(lookupTool, "the lookup tool is registered for non-owners");
+
+    const privateLookup = JSON.parse((await lookupTool.execute("call", { indicator: "169.254.169.254" })).content[0].text);
+
+    assert(privateLookup.error === "not_public", `the cloud metadata address is refused before any call: ${JSON.stringify(privateLookup)}`);
+
+    const realLookup = JSON.parse((await lookupTool.execute("call", { indicator: "44d88612fea8a8f36de82e1278abb02f" })).content[0].text);
+
+    assert(
+        realLookup.type === "md5" && Array.isArray(realLookup.sources) && realLookup.sources.every((source: { source: string }) => source.source === "otx"),
+        `a hash lookup reaches OTX only, through the real entry and database: ${JSON.stringify(realLookup).slice(0, 200)}`,
+    );
+
     const added = await call(owner, "threatintel_watch_add", { target: CVE.toLowerCase() });
 
     assert(

@@ -1,15 +1,18 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
 
+import type { LookupPayload } from "../lookup/lookup.js";
 import type { InvestigationView } from "../tool-result.js";
 import {
     checkAnswer,
     claimsFreshRetrieval,
     mentionsInvestigated,
 } from "./check-answer.js";
+import { checkIndicatorAnswer, extractLookup } from "./check-indicators.js";
 
 const TOOL_NAMES = new Set([
     "threatintel_investigate",
     "threatintel_prior_investigation",
+    "threatintel_lookup_indicator",
 ]);
 
 const MAX_SESSIONS = 100;
@@ -18,6 +21,7 @@ const WARNING_PREFIX = "⚠️ ThreatIntel evidence check:";
 
 type SessionState = {
     views: Map<string, InvestigationView>;
+    lookups: Map<string, LookupPayload>;
 
     /** The run that last retrieved data from a provider, not from history. */
     lastRetrievalRunId?: string;
@@ -85,10 +89,10 @@ export function registerAnswerGate(api: OpenClawPluginApi): void {
             return undefined;
         }
 
-        const findings = checkAnswer(
-            text,
-            Array.from(state.views.values()),
-        );
+        const findings = [
+            ...checkAnswer(text, Array.from(state.views.values())),
+            ...checkIndicatorAnswer(text, Array.from(state.lookups.values())),
+        ];
 
         if (findings.length === 0) {
             return undefined;
@@ -110,16 +114,23 @@ export function registerAnswerGate(api: OpenClawPluginApi): void {
 
         const payload = readPayload(event.result);
         const view = extractView(payload);
+        const lookup = view ? null : extractLookup(payload);
 
-        if (!view) {
+        if (!view && !lookup) {
             return;
         }
 
         // Re-inserting keeps the most recently active session last.
         const state: SessionState =
-            sessions.get(sessionKey) ?? { views: new Map() };
+            sessions.get(sessionKey) ?? { views: new Map(), lookups: new Map() };
 
-        state.views.set(view.target.toUpperCase(), view);
+        if (view) {
+            state.views.set(view.target.toUpperCase(), view);
+        }
+
+        if (lookup) {
+            state.lookups.set(lookup.indicator.toLowerCase(), lookup);
+        }
 
         if ((payload as { mode?: unknown }).mode === "refreshed") {
             state.lastRetrievalRunId = event.runId ?? context.runId;
@@ -146,10 +157,10 @@ export function registerAnswerGate(api: OpenClawPluginApi): void {
             return;
         }
 
-        const findings = checkAnswer(
-            answer,
-            Array.from(state.views.values()),
-        );
+        const findings = [
+            ...checkAnswer(answer, Array.from(state.views.values())),
+            ...checkIndicatorAnswer(answer, Array.from(state.lookups.values())),
+        ];
 
         // Only judged when the run is known, so a missing id cannot cause a retry.
         const runId = event.runId ?? context.runId;
@@ -181,7 +192,7 @@ export function registerAnswerGate(api: OpenClawPluginApi): void {
             reason: `Answer conflicts with retrieved evidence: ${findings.join(" ")}`,
             retry: {
                 instruction:
-                    "Correct or remove these statements using only the structured investigation results. Do not explain the correction unless it matters to the analyst.",
+                    "Correct or remove these statements using only the structured investigation and lookup results. Do not explain the correction unless it matters to the analyst.",
                 idempotencyKey: `threatintel-answer-gate:${event.runId ?? event.sessionId}`,
                 maxAttempts: 1,
             },

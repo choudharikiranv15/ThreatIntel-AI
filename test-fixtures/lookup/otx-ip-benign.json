@@ -1,0 +1,30 @@
+{
+ "indicator": "8.8.8.8",
+ "type": "IPv4",
+ "reputation": 0,
+ "asn": "AS15169 google llc",
+ "country_code": "US",
+ "validation": [
+  {
+   "source": "false_positive",
+   "message": "Known False Positive",
+   "name": "Known False Positive"
+  },
+  {
+   "source": "whitelist",
+   "message": "contained in whitelisted prefix",
+   "name": "Whitelisted IP"
+  }
+ ],
+ "false_positive": [
+  {
+   "assessment": "accepted",
+   "assessment_date": "2021-05-19T15:36:44.966000",
+   "report_date": "2021-03-16T14:46:19.003000"
+  }
+ ],
+ "pulse_info": {
+  "count": 0,
+  "pulses": []
+ }
+}

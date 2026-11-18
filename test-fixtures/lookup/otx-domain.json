@@ -1,0 +1,98 @@
+{
+ "indicator": "opmanager.pro",
+ "type": "domain",
+ "validation": [],
+ "false_positive": [],
+ "pulse_info": {
+  "count": 18,
+  "pulses": [
+   {
+    "id": "6a429369377f216bcfbdda03",
+    "name": "From Bing Search to Ransomware: Bumblebee and AdaptixC2 Deliver Akira",
+    "created": "2026-06-29T15:46:49.558000",
+    "modified": "2026-07-29T15:09:52.822000",
+    "tags": [
+     "rustdesk",
+     "trojanized installer",
+     "lateral movement",
+     "adaptixc2",
+     "akira",
+     "credential dumping"
+    ],
+    "malware_families": [
+     {
+      "id": "Bumblebee - S1039",
+      "display_name": "Bumblebee - S1039",
+      "target": null
+     },
+     {
+      "id": "AdaptixC2",
+      "display_name": "AdaptixC2",
+      "target": null
+     },
+     {
+      "id": "Akira",
+      "display_name": "Akira",
+      "target": null
+     }
+    ],
+    "adversary": "",
+    "TLP": "white",
+    "author": {
+     "username": "AlienVault"
+    }
+   },
+   {
+    "id": "68948bbcf88498b35a1a958e",
+    "name": "From Bing Search to Ransomware: Bumblebee and AdaptixC2 Deliver Akira",
+    "created": "2025-08-07T11:19:24.522000",
+    "modified": "2025-09-06T11:00:38.591000",
+    "tags": [
+     "rustdesk",
+     "data exfiltration",
+     "ransomware",
+     "credential theft",
+     "seo poisoning",
+     "lateral movement"
+    ],
+    "malware_families": [],
+    "adversary": "",
+    "TLP": "white",
+    "author": {
+     "username": "AlienVault"
+    }
+   },
+   {
+    "id": "689208038d812ad250ca2759",
+    "name": "Bumblebee Malware SEO Poisoning Campaign Leads to Akira Ransomware Deployment",
+    "created": "2025-08-05T13:32:51.290000",
+    "modified": "2025-09-04T13:01:30.268000",
+    "tags": [
+     "lateral movement",
+     "bumblebee",
+     "seo poisoning",
+     "akira ransomware",
+     "data exfiltration",
+     "trojanized installers"
+    ],
+    "malware_families": [
+     {
+      "id": "Bumblebee - S1039",
+      "display_name": "Bumblebee - S1039",
+      "target": null
+     },
+     {
+      "id": "Akira",
+      "display_name": "Akira",
+      "target": null
+     }
+    ],
+    "adversary": "",
+    "TLP": "white",
+    "author": {
+     "username": "AlienVault"
+    }
+   }
+  ]
+ }
+}

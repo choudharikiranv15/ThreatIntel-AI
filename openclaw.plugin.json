@@ -2,7 +2,7 @@
   "id": "threatintel-ai-engine",
   "name": "ThreatIntel AI Engine",
   "description": "Evidence-first threat intelligence investigation engine. Supports CVE investigations using NVD, CISA KEV, Red Hat Security Data API, and OSV, with source correlation and comparison over time. Provides vendor-specific product impact assessments and retrieval of previously persisted investigation context.",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "configSchema": {
     "type": "object",
     "properties": {
@@ -65,6 +65,61 @@
         "type": "boolean",
         "description": "Run the threat intelligence feed in the gateway. Off by default.",
         "default": false
+      },
+      "abuseipdbApiKey": {
+        "type": "string",
+        "description": "AbuseIPDB API key for indicator lookups. Without it, AbuseIPDB is reported as not checked."
+      },
+      "greynoiseApiKey": {
+        "type": "string",
+        "description": "Optional GreyNoise API key; the community API works without one at a lower limit."
+      },
+      "otxApiKey": {
+        "type": "string",
+        "description": "Optional AlienVault OTX API key; OTX works without one at a lower limit."
+      },
+      "lookupSources": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Enabled lookup services: internetdb, greynoise, abuseipdb, otx. All by default."
+      },
+      "lookupCacheHours": {
+        "type": "integer",
+        "description": "Hours a lookup answer is reused before the service is asked again.",
+        "default": 12,
+        "minimum": 0,
+        "maximum": 168
+      },
+      "lookupPerUserPerHour": {
+        "type": "integer",
+        "description": "Most indicator lookups one person may start per hour.",
+        "default": 20,
+        "minimum": 1,
+        "maximum": 500
+      },
+      "lookupDailyBudgets": {
+        "type": "object",
+        "properties": {
+          "internetdb": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "greynoise": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "abuseipdb": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "otx": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "description": "Most calls per service per UTC day. Defaults: internetdb 2000, greynoise 50, abuseipdb 900, otx 1000."
       },
       "feedNotifyTarget": {
         "type": "string",
@@ -191,7 +246,8 @@
       "threatintel_watch_set",
       "threatintel_watch_status",
       "threatintel_feed_status",
-      "threatintel_feed_run_now"
+      "threatintel_feed_run_now",
+      "threatintel_lookup_indicator"
     ]
   },
   "toolMetadata": {

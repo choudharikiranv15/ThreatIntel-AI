@@ -1,0 +1,10 @@
+{
+ "indicator": "no-such-indicator-threatintel-test.com",
+ "type": "domain",
+ "validation": [],
+ "false_positive": [],
+ "pulse_info": {
+  "count": 0,
+  "pulses": []
+ }
+}

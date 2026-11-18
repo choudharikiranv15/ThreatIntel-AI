@@ -1,0 +1,54 @@
+{
+ "indicator": "194.127.178.21",
+ "type": "IPv4",
+ "reputation": 0,
+ "asn": "AS62240 clouvider limited",
+ "country_code": "GB",
+ "validation": [],
+ "false_positive": [],
+ "pulse_info": {
+  "count": 2,
+  "pulses": [
+   {
+    "id": "6a5e2cb06c0076a662fe79ac",
+    "name": "EbeeJuly2026 Pt5",
+    "created": "2026-07-20T14:12:00.539000",
+    "modified": "2026-08-19T14:01:58.911000",
+    "tags": [
+     "filehashsha256",
+     "filehashmd5",
+     "filehashsha1",
+     "yara",
+     "cve20257771 cve",
+     "cve20260257 cve"
+    ],
+    "malware_families": [],
+    "adversary": "Chisel Malware, Operation Turb00, BlackMatter, LX RAT, Bumblebee, CylindricalCanine",
+    "TLP": "white",
+    "author": {
+     "username": "IMEBEEIMFINE"
+    }
+   },
+   {
+    "id": "6a5a73ade6d463a1b4d27df8",
+    "name": "From Bing Search to Ransomware: Bumblebee and AdaptixC2 Deliver Akira",
+    "created": "2026-07-17T18:25:49.226000",
+    "modified": "2026-08-16T18:08:55.625000",
+    "tags": [
+     "et info",
+     "bumblebee",
+     "rustdesk",
+     "filezilla",
+     "swisscom",
+     "july"
+    ],
+    "malware_families": [],
+    "adversary": "",
+    "TLP": "green",
+    "author": {
+     "username": "PetrP.73"
+    }
+   }
+  ]
+ }
+}

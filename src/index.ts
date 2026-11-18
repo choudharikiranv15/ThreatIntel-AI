@@ -59,6 +59,22 @@ import {
 
 import { feedSettings, type FeedPluginConfig } from "./feed/runtime.js";
 import { buildFeedTools, FEED_TOOL_DEFINITIONS } from "./feed/tools.js";
+import { buildLookupTool, LOOKUP_TOOL_DEFINITION, lookupSettings, type LookupPluginConfig } from "./lookup/tool.js";
+
+/* The indicator lookup is built per session, so the hourly limit counts the real requester. */
+function lookupTool() {
+  return {
+    ...LOOKUP_TOOL_DEFINITION,
+    factory: ({
+      config,
+      toolContext,
+    }: {
+      config: LookupPluginConfig;
+      toolContext: { senderIsOwner?: boolean; requesterSenderId?: string };
+    }) =>
+      buildLookupTool(toolContext, lookupSettings(config)) as unknown as AnyAgentTool,
+  };
+}
 
 type WatchToolName = keyof typeof WATCH_TOOL_DEFINITIONS;
 type FeedToolName = keyof typeof FEED_TOOL_DEFINITIONS;
@@ -177,6 +193,44 @@ const entry = defineToolPlugin({
         description: "Run the threat intelligence feed in the gateway. Off by default.",
         default: false,
       }),
+    ),
+
+    abuseipdbApiKey: Type.Optional(
+      Type.String({ description: "AbuseIPDB API key for indicator lookups. Without it, AbuseIPDB is reported as not checked." }),
+    ),
+
+    greynoiseApiKey: Type.Optional(
+      Type.String({ description: "Optional GreyNoise API key; the community API works without one at a lower limit." }),
+    ),
+
+    otxApiKey: Type.Optional(
+      Type.String({ description: "Optional AlienVault OTX API key; OTX works without one at a lower limit." }),
+    ),
+
+    lookupSources: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Enabled lookup services: internetdb, greynoise, abuseipdb, otx. All by default.",
+      }),
+    ),
+
+    lookupCacheHours: Type.Optional(
+      Type.Integer({ description: "Hours a lookup answer is reused before the service is asked again.", default: 12, minimum: 0, maximum: 168 }),
+    ),
+
+    lookupPerUserPerHour: Type.Optional(
+      Type.Integer({ description: "Most indicator lookups one person may start per hour.", default: 20, minimum: 1, maximum: 500 }),
+    ),
+
+    lookupDailyBudgets: Type.Optional(
+      Type.Object(
+        {
+          internetdb: Type.Optional(Type.Integer({ minimum: 0 })),
+          greynoise: Type.Optional(Type.Integer({ minimum: 0 })),
+          abuseipdb: Type.Optional(Type.Integer({ minimum: 0 })),
+          otx: Type.Optional(Type.Integer({ minimum: 0 })),
+        },
+        { description: "Most calls per service per UTC day. Defaults: internetdb 2000, greynoise 50, abuseipdb 900, otx 1000." },
+      ),
     ),
 
     feedNotifyTarget: Type.Optional(
@@ -640,6 +694,13 @@ const entry = defineToolPlugin({
      */
     tool(feedTool("status")),
     tool(feedTool("runNow")),
+
+    /*
+     * ------------------------------------------------------------
+     * Indicator lookup, everyone (limited per person and per service)
+     * ------------------------------------------------------------
+     */
+    tool(lookupTool()),
   ],
 });
 
