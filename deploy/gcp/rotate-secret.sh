@@ -25,7 +25,7 @@ ask() {
     local value
     read -rsp "$1: " value
     echo >&2
-    [ -n "$value" ] || { echo "Nothing entered; nothing changed." >&2; exit 1; }
+    [ -n "${value//[[:space:]]/}" ] || { echo "Nothing entered (a paste may not have arrived); nothing changed." >&2; exit 1; }
     printf '%s' "$value"
 }
 
@@ -72,13 +72,40 @@ if (config.channels?.discord && "token" in config.channels.discord) {
     nvd|abuseipdb|greynoise|otx)
         field=$(case "$1" in nvd) echo nvdApiKey;; abuseipdb) echo abuseipdbApiKey;; greynoise) echo greynoiseApiKey;; otx) echo otxApiKey;; esac)
         backup "$S/openclaw.json"
+        # The key is trimmed, checked against the service, and saved only if it was not rejected.
         ask "New $1 API key" | node -e '
 const fs = require("fs");
-const [file, field] = process.argv.slice(1);
-const config = JSON.parse(fs.readFileSync(file, "utf8"));
-config.plugins.entries["threatintel-ai-engine"].config[field] = fs.readFileSync(0, "utf8");
-fs.writeFileSync(file, JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
-' "$S/openclaw.json" "$field"
+const [file, field, service] = process.argv.slice(1);
+const value = fs.readFileSync(0, "utf8").trim();
+if (!value) process.exit(1); // The prompt has already said why.
+const formats = { abuseipdb: /^[0-9a-f]{80}$/i, otx: /^[0-9a-f]{64}$/i, nvd: /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i };
+if (value.length < 16 || /\s/.test(value)) {
+    console.error("That is not a key: the paste may not have arrived (right-click or Ctrl+Shift+V to paste). Nothing changed.");
+    process.exit(1);
+}
+if (formats[service] && !formats[service].test(value)) {
+    console.error(`Note: this does not have the usual ${service} key format; checking it with ${service} anyway.`);
+}
+const checks = {
+    abuseipdb: ["https://api.abuseipdb.com/api/v2/check?ipAddress=8.8.8.8", { Key: value, Accept: "application/json" }],
+    otx: ["https://otx.alienvault.com/api/v1/user/me", { "X-OTX-API-KEY": value }],
+    greynoise: ["https://api.greynoise.io/v3/community/8.8.8.8", { key: value }],
+    nvd: ["https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2021-44228", { apiKey: value }],
+};
+(async () => {
+    const [url, headers] = checks[service];
+    const status = await fetch(url, { headers, signal: AbortSignal.timeout(20000) }).then((r) => r.status, () => 0);
+    if (status === 401 || status === 403) {
+        console.error(`${service} rejected this key (HTTP ${status}). Nothing changed.`);
+        process.exitCode = 1;
+        return;
+    }
+    console.error(status === 200 ? `${service} accepted the key.` : `Could not confirm the key with ${service} (HTTP ${status}); saving it anyway.`);
+    const config = JSON.parse(fs.readFileSync(file, "utf8"));
+    config.plugins.entries["threatintel-ai-engine"].config[field] = value;
+    fs.writeFileSync(file, JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
+})();
+' "$S/openclaw.json" "$field" "$1"
         restart
         ;;
     db)
