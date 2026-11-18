@@ -203,7 +203,7 @@ export async function lookupSource(
     }
 
     if (source === "abuseipdb" && !options.keys.abuseipdb) {
-        return { ...base, status: "not_configured", error: "Needs an AbuseIPDB API key (abuseipdbApiKey)." };
+        return { ...base, status: "not_configured", error: "No AbuseIPDB API key is configured on the server." };
     }
 
     try {

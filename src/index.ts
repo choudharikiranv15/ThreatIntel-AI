@@ -35,6 +35,10 @@ import {
 } from "./verification/answer-gate.js";
 
 import {
+  registerDisclosureGuard,
+} from "./verification/disclosure-guard.js";
+
+import {
   rememberVendorRows,
 } from "./verification/evidence-cache.js";
 
@@ -709,6 +713,8 @@ const registerTools = entry.register;
 entry.register = (api) => {
   registerTools(api);
   registerAnswerGate(api);
+  // Registered last and runs last, so nothing internal reaches chat.
+  registerDisclosureGuard(api);
 
   // Scheduled monitoring. It starts only when the gateway starts services, and
   // stays idle unless watchEnabled is set.

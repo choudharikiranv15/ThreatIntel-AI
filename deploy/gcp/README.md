@@ -133,12 +133,25 @@ openclaw config set tools.alsoAllow '["threatintel-ai-engine","web_fetch","web_s
 openclaw config set tools.deny '["group:runtime","group:fs","group:sessions","group:automation","group:nodes","group:ui","skill_workshop","cron"]' --strict-json
 openclaw config set tools.exec '{"security":"deny","ask":"off"}' --strict-json
 openclaw config set gateway.controlUi.allowInsecureAuth false --strict-json
+# Chat commands and directives (/model, /verbose, /reasoning, /reset...) from the owner only.
+openclaw config set commands.allowFrom '{"discord":["user:<your Discord user ID>"]}' --strict-json
+openclaw config set commands.restart false --strict-json
 openclaw gateway restart
 ```
 
+Replace the agent's workspace files with the ones in [deploy/workspace](../workspace): OpenClaw's starter files describe the operator and the host, and everything in them is part of the model's context. Back up the old ones first:
+
+```bash
+W=~/.openclaw/workspace
+tar -czf ~/.openclaw/workspace-backup.tgz -C "$W" . && chmod 600 ~/.openclaw/workspace-backup.tgz
+install -m 600 ~/ThreatIntel-AI/deploy/workspace/*.md "$W"/
+```
+
+The plugin also adds confidentiality rules to the system prompt and checks every outgoing message: anything naming a secret, an internal path or host, an administrative command, a settings key, the model, or the instruction files is replaced before it reaches Discord (`src/verification/disclosure-guard.ts`). Leave `plugins.entries.threatintel-ai-engine.hooks.allowPromptInjection` unset so the rules are added, and keep `channels.discord.streaming.mode` at `off` so no draft text is shown before the check.
+
 Connect to the database as the least-privilege role from `db/migrations/004_app_role.sql`, not Supabase's `postgres` role, and harden SSH with a drop-in such as `/etc/ssh/sshd_config.d/60-hardening.conf` (`PermitRootLogin no`, `X11Forwarding no`, `MaxAuthTries 3`), checked with `sudo sshd -t` before `sudo systemctl reload ssh`.
 
-To replace a secret without it appearing on screen or in shell history: `bash ~/ThreatIntel-AI/deploy/gcp/rotate-secret.sh discord|nvd|db|openrouter`.
+To replace a secret without it appearing on screen or in shell history: `bash ~/ThreatIntel-AI/deploy/gcp/rotate-secret.sh discord|nvd|abuseipdb|greynoise|otx|db|openrouter`. Never configure a key through the bot.
 
 ## Everyday operations
 

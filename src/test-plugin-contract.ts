@@ -244,7 +244,66 @@ type RegisteredTool = {
 
 const tools = new Map<string, RegisteredTool>();
 
-const hooks = new Map<string, (event: Row, context: Row) => unknown>();
+type HookHandler = (event: Row, context: Row) => unknown;
+
+const registered = new Map<string, { handler: HookHandler; priority: number }[]>();
+
+/*
+ * Composes every handler for a hook the way OpenClaw's runner does: descending
+ * priority; message_sending handlers all see the original event and the last
+ * rewrite wins; reply_payload_sending handlers each see the latest payload.
+ */
+function composed(name: string): HookHandler | undefined {
+    const list = registered.get(name);
+
+    if (!list?.length) {
+        return undefined;
+    }
+
+    const ordered = [...list].sort((a, b) => b.priority - a.priority);
+
+    if (name === "message_sending") {
+        return (event, context) => {
+            let result: Row | undefined;
+
+            for (const { handler } of ordered) {
+                const next = handler(event, context) as Row | undefined;
+
+                if (next) {
+                    result = { ...result, ...Object.fromEntries(Object.entries(next).filter(([, v]) => v !== undefined)) };
+                }
+            }
+
+            return result;
+        };
+    }
+
+    if (name === "reply_payload_sending") {
+        return (event, context) => {
+            let payload = event.payload;
+            let result: Row | undefined;
+
+            for (const { handler } of ordered) {
+                const next = handler({ ...event, payload }, context) as Row | undefined;
+
+                if (next) {
+                    payload = next.payload ?? payload;
+                    result = { ...result, ...next, payload };
+
+                    if (next.cancel === true) {
+                        break;
+                    }
+                }
+            }
+
+            return result;
+        };
+    }
+
+    return ordered[ordered.length - 1].handler;
+}
+
+const hooks = { get: composed };
 
 entry.register({
     pluginConfig: {},
@@ -257,8 +316,8 @@ entry.register({
     },
     // The watch service stays idle here: monitoring is off by default.
     registerService: () => undefined,
-    on: (name: string, handler: (event: Row, context: Row) => unknown) => {
-        hooks.set(name, handler);
+    on: (name: string, handler: HookHandler, options?: { priority?: number }) => {
+        registered.set(name, [...(registered.get(name) ?? []), { handler, priority: options?.priority ?? 0 }]);
     },
 } as unknown as Parameters<typeof entry.register>[0]);
 
@@ -885,6 +944,34 @@ async function main(): Promise<void> {
         ) === undefined,
         "evidence must not be applied across sessions",
     );
+
+    /* Internal details are withheld by the whole delivery chain, after the evidence check. */
+    const leaking = `${CVE} has a CVSS base score of 9.8. Settings are in ~/.openclaw/openclaw.json.`;
+    const leakSent = messageSending({ to: "x", content: leaking }, session) as { content?: string } | undefined;
+
+    assert(
+        leakSent?.content?.startsWith("🔒") && !leakSent.content.includes(".openclaw"),
+        "a message with internal details must be withheld even when the evidence check also rewrote it",
+    );
+
+    const leakReplied = replyPayloadSending(
+        { payload: { text: "Run openclaw status --all", isError: false }, kind: "final" },
+        session,
+    ) as { payload?: { text?: string } } | undefined;
+
+    assert(
+        leakReplied?.payload?.text?.startsWith("🔒"),
+        "a reply payload with internal details must be withheld",
+    );
+
+    const promptBuild = hooks.get("before_prompt_build");
+
+    assert(
+        typeof (promptBuild?.({}, {}) as { appendSystemContext?: unknown } | undefined)?.appendSystemContext === "string",
+        "the confidentiality rules must be added to the system prompt",
+    );
+
+    console.log("✓ Internal details are withheld on both delivery paths");
 
     console.log("✓ A wrong answer is marked at delivery, once, in its own session");
 
