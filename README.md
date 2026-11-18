@@ -293,6 +293,7 @@ Every `feedIntervalHours`, the feed collects new advisories, rates each one agai
 | `paloalto`, `fortinet`, `cisco` | Vendor PSIRT feeds | |
 | `aws`, `gcp` | Cloud security bulletins | |
 | `dfir-report`, `unit42` | Research articles (The DFIR Report, Unit 42) | The source of most indicators. Each recent article's page is read at most once a day for its indicator section. |
+| `cybersecuritynews` | News (Cyber Security News) | Secondary reporting: matched on title and summary only, never read for indicators, and its exploitation claims are marked unverified. Posted only when in scope or when it names a CVE in CISA KEV. |
 
 All sources are public. Each is fetched on its own with retries, so one failing source never blocks the others. A cycle where every source fails is recorded as failed, never as an empty success, and a page that answers 200 but is not a feed, such as a bot check, counts as a failure.
 

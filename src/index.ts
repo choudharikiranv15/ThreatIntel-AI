@@ -255,7 +255,7 @@ const entry = defineToolPlugin({
     feedSources: Type.Optional(
       Type.Array(Type.String(), {
         description:
-          "Enabled feed sources: cisa-kev, cisa-advisories, cisa-ics, msrc, paloalto, fortinet, cisco, aws, gcp, dfir-report, unit42. All by default.",
+          "Enabled feed sources: cisa-kev, cisa-advisories, cisa-ics, msrc, paloalto, fortinet, cisco, aws, gcp, dfir-report, unit42, cybersecuritynews. All by default.",
       }),
     ),
 

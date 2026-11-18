@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Recorded from https://cybersecuritynews.com/feed/ on 2026-11-18; trimmed to four items, full-text content removed. -->
+<rss version="2.0"
+	xmlns:media="http://search.yahoo.com/mrss/"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:atom="http://www.w3.org/2005/Atom"
+	xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
+	xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+	>
+
+<channel>
+	<title>Cyber Security News</title>
+	<atom:link href="https://cybersecuritynews.com/feed/" rel="self" type="application/rss+xml" />
+	<link>https://cybersecuritynews.com/</link>
+	<description>World&#039;s #1 Premier Cybersecurity and Hacking News Portal</description>
+	<lastBuildDate>Wed, 18 Nov 2026 12:37:29 +0000</lastBuildDate>
+	<language>en-US</language>
+	<sy:updatePeriod>
+	hourly	</sy:updatePeriod>
+	<sy:updateFrequency>
+	1	</sy:updateFrequency>
+	
+
+<image>
+	<url>https://cybersecuritynews.com/wp-content/uploads/2025/12/cropped-CSN-Favico-32x32.webp</url>
+	<title>Cyber Security News</title>
+	<link>https://cybersecuritynews.com/</link>
+	<width>32</width>
+	<height>32</height>
+</image> 
+<site xmlns="com-wordpress:feed-additions:1">192061645</site>	<item>
+		<title>Chinese APT Hackers Target Global Banks to Steal Financial Intelligence and Spy on Microsoft 365 Accounts</title>
+		<link>https://cybersecuritynews.com/global-banks/</link>
+		
+		<dc:creator><![CDATA[Tushar Subhra Dutta]]></dc:creator>
+		<pubDate>Wed, 18 Nov 2026 12:37:05 +0000</pubDate>
+				<category><![CDATA[Cyber Security News]]></category>
+		<category><![CDATA[Threats]]></category>
+		<category><![CDATA[cyber security]]></category>
+		<category><![CDATA[cyber security news]]></category>
+		<guid isPermaLink="false">https://cybersecuritynews.com/?p=172629</guid>
+
+					<description><![CDATA[<p>Chinese state-linked hacking groups are going after banks around the world, and their goal is intelligence rather than cash. Several of these groups are also reading email in Microsoft 365 accounts, according to new infrastructure research. The shift matters because nation-state hackers have usually hit banks to steal money. In 2020, CISA described North Korea&#8217;s [&#8230;]</p>
+<p>The post <a href="https://cybersecuritynews.com/global-banks/">Chinese APT Hackers Target Global Banks to Steal Financial Intelligence and Spy on Microsoft 365 Accounts</a> appeared first on <a href="https://cybersecuritynews.com">Cyber Security News</a>.</p>
+]]></description>
+					
+		
+		
+		<media:content url="https://cybersecuritynews.com/wp-content/uploads/2026/11/Chinese-APT-Hackers-Target-Global-Banks-to-Steal-Financial-Intelligence-and-Spy-on-Microsoft-365-Accounts.webp" medium="image"></media:content>
+<post-id xmlns="com-wordpress:feed-additions:1">172629</post-id>	</item>
+<item>
+		<title>Hackers Impersonate Microsoft Exchange Online Alerts to Trick Users During Microsoft 365 Outage</title>
+		<link>https://cybersecuritynews.com/hackers-impersonate-microsoft-exchange/</link>
+		
+		<dc:creator><![CDATA[Tushar Subhra Dutta]]></dc:creator>
+		<pubDate>Wed, 18 Nov 2026 12:23:15 +0000</pubDate>
+				<category><![CDATA[Cyber Security News]]></category>
+		<category><![CDATA[Threats]]></category>
+		<category><![CDATA[cyber security]]></category>
+		<category><![CDATA[cyber security news]]></category>
+		<guid isPermaLink="false">https://cybersecuritynews.com/?p=172613</guid>
+
+					<description><![CDATA[<p>Hackers used a real Microsoft 365 outage to send fake Exchange Online alerts claiming that four emails were being held and would be deleted unless recipients restored them. The messages borrowed a genuine Microsoft incident number and sent users through several redirects to a page that looked like Microsoft’s sign-in screen. The outage was real; [&#8230;]</p>
+<p>The post <a href="https://cybersecuritynews.com/hackers-impersonate-microsoft-exchange/">Hackers Impersonate Microsoft Exchange Online Alerts to Trick Users During Microsoft 365 Outage</a> appeared first on <a href="https://cybersecuritynews.com">Cyber Security News</a>.</p>
+]]></description>
+					
+		
+		
+		<media:content url="https://cybersecuritynews.com/wp-content/uploads/2026/11/Hackers-Impersonate-Microsoft-Exchange-Online-Alerts-to-Trick-Users-During-Microsoft-365-Outage.webp" medium="image"></media:content>
+<post-id xmlns="com-wordpress:feed-additions:1">172613</post-id>	</item>
+<item>
+		<title>CISA Warns of Puppet Enterprise Vulnerability Actively Exploited in Attacks</title>
+		<link>https://cybersecuritynews.com/puppet-enterprise-flaw-actively-exploited/</link>
+		
+		<dc:creator><![CDATA[Guru Baran]]></dc:creator>
+		<pubDate>Wed, 18 Nov 2026 11:59:36 +0000</pubDate>
+				<category><![CDATA[Cyber Security]]></category>
+		<category><![CDATA[Cyber Security News]]></category>
+		<category><![CDATA[Vulnerability]]></category>
+		<category><![CDATA[Vulnerability News]]></category>
+		<category><![CDATA[cyber security]]></category>
+		<category><![CDATA[cyber security news]]></category>
+		<guid isPermaLink="false">https://cybersecuritynews.com/?p=172631</guid>
+
+					<description><![CDATA[<p>The U.S. Cybersecurity and Infrastructure Security Agency (CISA) has warned that attackers are exploiting a critical vulnerability in Perforce Puppet Enterprise. The agency added CVE-2026-115731 to its Known Exploited Vulnerabilities (KEV) catalog on November 17, 2026, citing evidence of active exploitation. The flaw lets an attacker run code on a vulnerable Puppet Server with the [&#8230;]</p>
+<p>The post <a href="https://cybersecuritynews.com/puppet-enterprise-flaw-actively-exploited/">CISA Warns of Puppet Enterprise Vulnerability Actively Exploited in Attacks</a> appeared first on <a href="https://cybersecuritynews.com">Cyber Security News</a>.</p>
+]]></description>
+					
+		
+		
+		<media:content url="https://cybersecuritynews.com/wp-content/uploads/2026/11/Puppet-Enterprise-Vulnerability.webp" medium="image"></media:content>
+<post-id xmlns="com-wordpress:feed-additions:1">172631</post-id>	</item>
+<item>
+		<title>Chrome 158 Fixes 204 Vulnerabilities, Including Critical Code Execution Flaws</title>
+		<link>https://cybersecuritynews.com/chrome-158-fixes-204-vulnerabilities/</link>
+		
+		<dc:creator><![CDATA[Abinaya]]></dc:creator>
+		<pubDate>Wed, 18 Nov 2026 10:41:12 +0000</pubDate>
+				<category><![CDATA[Chrome]]></category>
+		<category><![CDATA[Cyber Security]]></category>
+		<category><![CDATA[Cyber Security News]]></category>
+		<category><![CDATA[Vulnerabilities]]></category>
+		<category><![CDATA[cyber security]]></category>
+		<category><![CDATA[cyber security news]]></category>
+		<guid isPermaLink="false">https://cybersecuritynews.com/?p=172621</guid>
+
+					<description><![CDATA[<p>Google began rolling out Chrome 158 to Windows, macOS, and Linux on November 17, 2026, with 204 security fixes. The desktop release notes list six critical memory bugs that could lead to code execution. However, Google did not spell out the impact of each flaw. The patched builds are 158.0.8127.36 for Linux and 158.0.8127.36 or [&#8230;]</p>
+<p>The post <a href="https://cybersecuritynews.com/chrome-158-fixes-204-vulnerabilities/">Chrome 158 Fixes 204 Vulnerabilities, Including Critical Code Execution Flaws</a> appeared first on <a href="https://cybersecuritynews.com">Cyber Security News</a>.</p>
+]]></description>
+					
+		
+		
+		<media:content url="https://cybersecuritynews.com/wp-content/uploads/2026/11/Chrome-158-Fixes-204-Vulnerabilities-Including-Critical-Code-Execution-Flaws.webp" medium="image"></media:content>
+<post-id xmlns="com-wordpress:feed-additions:1">172621</post-id>	</item>
+</channel>
+</rss>

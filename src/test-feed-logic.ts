@@ -729,8 +729,58 @@ async function testResearch(): Promise<void> {
     console.log("✓ Research articles add real indicators, keep source cautions, and are posted once per threat");
 }
 
+/* ------------------------------ News reports ------------------------------ */
+
+async function testNews(): Promise<void> {
+    const items = parseSource("cybersecuritynews", fixture("cybersecuritynews.xml"));
+
+    assert(items.length === 4, `the recorded Cyber Security News feed parses: ${items.length}`);
+    assert(
+        items.every((item) => item.news && !item.research && item.itemKey.startsWith("cybersecuritynews:") && item.url.startsWith("https://cybersecuritynews.com/") && item.publishedAt && item.iocs.length === 0),
+        "news items are marked as news, keyed by article, dated, and carry no indicators",
+    );
+    assert(items.every((item) => !/appeared first on/i.test(item.text)), "the site's footer is not part of the text");
+
+    const puppet = items.find((item) => /Puppet Enterprise/.test(item.title));
+
+    assert(puppet, "the exploited-vulnerability story is in the fixture");
+
+    /* Secondary reporting: its exploitation claim is shown as unverified. */
+    const claimed = evaluated({ ...puppet, exploitationClaim: "reported", text: `${puppet.text} FortiGate` });
+
+    assert(claimed.priority === "P2" && claimed.reasons.some((reason) => /news report describes exploitation \(unverified/.test(reason)), `an in-scope exploitation claim from news is posted and marked unverified: ${claimed.priority} ${claimed.reasons.join("; ")}`);
+
+    /* Out of scope and not in KEV: not posted, however alarming the headline. */
+    const banks = items.find((item) => /Global Banks/.test(item.title))!;
+
+    assert(evaluated({ ...banks, platforms: [] }, { ...SCOPE, logSources: [] }).priority === "ignore", "news outside the scope is not posted");
+    assert(evaluated({ ...banks, cves: ["CVE-2026-1111"] }, { ...SCOPE, logSources: [] }, ["CVE-2026-1111"]).priority === "P3", "news naming a KEV-listed CVE is posted");
+
+    /* Article pages are never read for a news source. */
+    const realFetch = globalThis.fetch;
+    const feed = fixture("cybersecuritynews.xml").replace(/<pubDate>[^<]*<\/pubDate>/g, `<pubDate>${new Date().toUTCString()}</pubDate>`);
+    const requested: string[] = [];
+
+    globalThis.fetch = (async (input: string | URL | Request) => {
+        requested.push(String(input));
+        return new Response(feed, { status: 200 });
+    }) as typeof fetch;
+
+    try {
+        const options = { timeoutMs: 2000, retry: { attempts: 1, maxDelayMs: 1, budgetMs: 1 }, since: () => new Date(Date.now() - 86_400_000), kevCatalog: async () => ({ catalog: {} }) };
+        const fetched = await createSourceFetcher(options)("cybersecuritynews");
+
+        assert(fetched.length === 4 && requested.length === 1 && requested[0] === "https://cybersecuritynews.com/feed/", `only the feed is requested: ${requested.join(" ")}`);
+    } finally {
+        globalThis.fetch = realFetch;
+    }
+
+    console.log("✓ News reports are parsed, marked unverified, scope-gated, and never scraped for indicators");
+}
+
 async function main(): Promise<void> {
     await testResearch();
+    await testNews();
     testQuietNotice();
     testStatusSummary();
     testParsing();

@@ -111,7 +111,9 @@ export function evaluate(item: RawItem, scope: ScopeConfig, kevCves: ReadonlySet
             : exploitation === "reported"
                 ? item.research
                     ? "a research article describes exploitation (unverified: not a vendor or CISA statement)"
-                    : "the source reports exploitation"
+                    : item.news
+                        ? "a news report describes exploitation (unverified: secondary reporting, not a vendor or CISA statement)"
+                        : "the source reports exploitation"
                 : "no exploitation evidence",
     );
     if (bundle && kevHits.length > 0) {

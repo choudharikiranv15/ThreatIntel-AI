@@ -279,6 +279,28 @@ function parseResearch(source: "dfir-report" | "unit42", entries: FeedEntry[]): 
         });
 }
 
+/*
+ * News reports. Title and summary only, as for research, and the article page
+ * is never read: a news site retells others' findings, so its indicators would
+ * be second-hand. The "The post … appeared first on …" footer is dropped.
+ */
+function parseNews(source: "cybersecuritynews", entries: FeedEntry[]): RawItem[] {
+    return entries
+        .filter((entry) => /^https:\/\//.test(entry.link))
+        .map((entry) => {
+            const url = canonicalUrl(entry.link);
+            const text = htmlToText(entry.html.replace(/<p>\s*The post[\s\S]*?appeared first on[\s\S]*?<\/p>/gi, ""));
+
+            return item(source, `${source}:${lastPathSegment(url)}`, {
+                title: entry.title,
+                url,
+                publishedAt: entry.published ?? entry.updated,
+                text,
+                news: true,
+            });
+        });
+}
+
 const ARTICLE_LIMIT = 3_000_000;
 
 export type TextFetcher = (url: string) => Promise<string>;
@@ -308,6 +330,7 @@ export const FEED_URLS: Record<Exclude<FeedSourceId, "cisa-kev">, string> = {
     gcp: "https://cloud.google.com/feeds/google-cloud-security-bulletins.xml",
     "dfir-report": "https://thedfirreport.com/feed/",
     unit42: "https://unit42.paloaltonetworks.com/feed/",
+    cybersecuritynews: "https://cybersecuritynews.com/feed/",
 };
 
 /** Parses one source's feed document. Exported for tests with recorded feeds. */
@@ -323,6 +346,8 @@ export function parseSource(source: Exclude<FeedSourceId, "cisa-kev">, xml: stri
         case "dfir-report":
         case "unit42":
             return parseResearch(source, entries);
+        case "cybersecuritynews":
+            return parseNews(source, entries);
         default:
             return parseVendor(source, entries);
     }

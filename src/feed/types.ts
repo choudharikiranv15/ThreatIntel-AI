@@ -14,7 +14,8 @@ export type FeedSourceId =
     | "aws"
     | "gcp"
     | "dfir-report"
-    | "unit42";
+    | "unit42"
+    | "cybersecuritynews";
 
 export const ALL_FEED_SOURCES: FeedSourceId[] = [
     "cisa-kev",
@@ -28,10 +29,14 @@ export const ALL_FEED_SOURCES: FeedSourceId[] = [
     "gcp",
     "dfir-report",
     "unit42",
+    "cybersecuritynews",
 ];
 
 /** Research publications: articles about observed attacks, not vendor advisories. */
 export const RESEARCH_SOURCES: FeedSourceId[] = ["dfir-report", "unit42"];
+
+/** News sites: secondary reporting of other people's findings. Never read for indicators. */
+export const NEWS_SOURCES: FeedSourceId[] = ["cybersecuritynews"];
 
 export type Severity = "critical" | "high" | "medium" | "low" | "unknown";
 
@@ -80,6 +85,8 @@ export type RawItem = {
     kevListed: boolean;
     /** True for research articles, whose claims are not vendor or CISA statements. */
     research?: boolean;
+    /** True for news reports, which retell other people's findings: unverified like research. */
+    news?: boolean;
 };
 
 export type Evaluation = {
