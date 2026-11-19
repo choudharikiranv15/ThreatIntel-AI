@@ -33,6 +33,8 @@ export type LookupDeps = {
 export type LookupSummary = {
     /** Services that report the indicator as malicious or abusive. */
     threatReports: string[];
+    /** Reports a service itself no longer rates as abusive, such as AbuseIPDB reports at 0% confidence. */
+    lowConfidence: string[];
     /** Services that describe it as a known benign service. */
     knownBenign: string[];
     /** Services with exposure data (open ports, hostnames), which is not a verdict. */
@@ -62,7 +64,7 @@ const NOT_CHECKED_REASON: Partial<Record<SourceResult["status"], string>> = {
 };
 
 export function summarise(results: SourceResult[]): LookupSummary {
-    const summary: LookupSummary = { threatReports: [], knownBenign: [], exposure: [], noRecord: [], notChecked: [], statement: "" };
+    const summary: LookupSummary = { threatReports: [], lowConfidence: [], knownBenign: [], exposure: [], noRecord: [], notChecked: [], statement: "" };
 
     for (const result of results) {
         const name = SOURCE_NAMES[result.source];
@@ -79,8 +81,11 @@ export function summarise(results: SourceResult[]): LookupSummary {
 
         if (result.source === "abuseipdb") {
             if (f.isWhitelisted === true) summary.knownBenign.push(`${name} (allowlisted)`);
-            if (Number(f.totalReports) > 0) {
+            if (Number(f.totalReports) > 0 && Number(f.abuseConfidenceScore) > 0) {
                 summary.threatReports.push(`${name} (abuse confidence ${f.abuseConfidenceScore}%, ${f.totalReports} reports from ${f.distinctReporters} reporters)`);
+            } else if (Number(f.totalReports) > 0) {
+                // AbuseIPDB rates these 0%: old, or outweighed (allowlisted services collect many).
+                summary.lowConfidence.push(`${name} (${f.totalReports} past reports from ${f.distinctReporters} reporters, abuse confidence 0%)`);
             } else {
                 summary.noRecord.push(name);
             }
@@ -107,6 +112,7 @@ export function summarise(results: SourceResult[]): LookupSummary {
     const parts: string[] = [];
 
     parts.push(summary.threatReports.length ? `Reported as malicious or abusive by ${summary.threatReports.join("; ")}.` : "No service reports it as malicious.");
+    if (summary.lowConfidence.length) parts.push(`Past reports the service no longer rates as abusive: ${summary.lowConfidence.join("; ")}.`);
     if (summary.knownBenign.length) parts.push(`Known benign according to ${summary.knownBenign.join("; ")}.`);
     if (summary.exposure.length) parts.push(`Exposure data: ${summary.exposure.join("; ")}.`);
     if (summary.notChecked.length) parts.push(`Not checked: ${summary.notChecked.join("; ")}.`);

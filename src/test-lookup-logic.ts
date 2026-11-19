@@ -141,6 +141,21 @@ function testSummary(): void {
 
     assert(benign.knownBenign.length === 2 && /Known benign according to/.test(benign.statement), "benign markers are stated as such");
 
+    /* AbuseIPDB reports it no longer rates as abusive are not a threat report (seen live: 118.25.6.39, 8.8.8.8). */
+    const zero = (data: Record<string, unknown>) => result("abuseipdb", parseAbuseIpDb({ data: { abuseConfidenceScore: 0, ...data } }));
+    const stale = summarise([zero({ totalReports: 2, numDistinctUsers: 2 })]);
+
+    assert(stale.threatReports.length === 0 && stale.lowConfidence.length === 1, "0% confidence reports are low confidence, not a threat report");
+    assert(/No service reports it as malicious/.test(stale.statement) && /Past reports the service no longer rates as abusive: AbuseIPDB \(2 past reports from 2 reporters, abuse confidence 0%\)/.test(stale.statement), `and the statement says so: ${stale.statement}`);
+
+    const allowlisted = summarise([zero({ totalReports: 199, numDistinctUsers: 64, isWhitelisted: true })]);
+
+    assert(!/Reported as malicious/.test(allowlisted.statement) && allowlisted.knownBenign.length === 1, `an allowlisted address is never called malicious: ${allowlisted.statement}`);
+
+    const scored = summarise([result("abuseipdb", parseAbuseIpDb({ data: { abuseConfidenceScore: 1, totalReports: 3, numDistinctUsers: 1 } }))]);
+
+    assert(scored.threatReports.length === 1 && /abuse confidence 1%/.test(scored.statement), "any confidence above zero is a threat report, with its figure");
+
     console.log("✓ The summary separates threat reports, exposure, benign markers, and what was not checked");
 }
 
