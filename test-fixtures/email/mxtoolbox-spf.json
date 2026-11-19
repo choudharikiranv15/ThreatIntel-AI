@@ -1,0 +1,95 @@
+{
+  "_fixture": "Recorded from the MXToolbox API on 2026-11-19 and trimmed to the fields the parser reads.",
+  "Command": "spf",
+  "CommandArgument": "google.com",
+  "IsError": false,
+  "Records": [
+    "v=spf1 include:_spf.google.com ~all"
+  ],
+  "Information": [
+    {
+      "Prefix": "",
+      "Type": "record",
+      "Value": "txt",
+      "PrefixDesc": "",
+      "Description": "v=spf1 include:_spf.google.com ~all",
+      "RecordNum": "1"
+    },
+    {
+      "Prefix": "",
+      "Type": "v",
+      "Value": "spf1",
+      "PrefixDesc": "",
+      "Description": "The SPF record version",
+      "RecordNum": null
+    },
+    {
+      "Prefix": "+",
+      "Type": "include",
+      "Value": "_spf.google.com",
+      "PrefixDesc": "Pass",
+      "Description": "The specified domain is searched for an &#39;allow&#39;.",
+      "RecordNum": null
+    },
+    {
+      "Prefix": "~",
+      "Type": "all",
+      "Value": "",
+      "PrefixDesc": "SoftFail",
+      "Description": "Always matches. It goes at the end of your record.",
+      "RecordNum": null
+    }
+  ],
+  "Failed": [],
+  "Warnings": [],
+  "Passed": [
+    {
+      "Name": "SPF Record Published",
+      "Info": "SPF Record found"
+    },
+    {
+      "Name": "SPF Record Deprecated",
+      "Info": "No deprecated records found"
+    },
+    {
+      "Name": "SPF Multiple Records",
+      "Info": "Less than two records found"
+    },
+    {
+      "Name": "SPF Contains characters after ALL",
+      "Info": "No items after 'ALL'."
+    },
+    {
+      "Name": "SPF Syntax Check",
+      "Info": "The record is valid"
+    },
+    {
+      "Name": "SPF Included Lookups",
+      "Info": "Number of included lookups is OK"
+    },
+    {
+      "Name": "SPF Recursive Loop",
+      "Info": "Nor Recursive Loops on Includes"
+    },
+    {
+      "Name": "SPF Duplicate Include",
+      "Info": "No Duplicate Includes Found"
+    },
+    {
+      "Name": "SPF Type PTR Check",
+      "Info": "No type PTR found"
+    },
+    {
+      "Name": "SPF Void Lookups",
+      "Info": "Number of void lookups is OK"
+    },
+    {
+      "Name": "SPF MX Resource Records",
+      "Info": "Number of MX Resource Records is OK"
+    },
+    {
+      "Name": "SPF Record Null Value",
+      "Info": "No Null DNS Lookups found"
+    }
+  ]
+}

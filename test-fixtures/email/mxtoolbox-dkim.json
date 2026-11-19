@@ -1,0 +1,52 @@
+{
+  "_fixture": "Recorded from the MXToolbox API on 2026-11-19 and trimmed to the fields the parser reads.",
+  "Command": "dkim",
+  "CommandArgument": "google.com:20230601",
+  "IsError": true,
+  "Records": [
+    "v=DKIM1; k=rsa; p="
+  ],
+  "Information": [
+    {
+      "Tag": "",
+      "TagValue": "",
+      "Name": "record",
+      "Description": "v=DKIM1; k=rsa; p="
+    },
+    {
+      "Tag": "v",
+      "TagValue": "DKIM1",
+      "Name": "Version",
+      "Description": "Identifies the record retrieved as a DKIM record. It must be the first tag in the record."
+    },
+    {
+      "Tag": "k",
+      "TagValue": "rsa",
+      "Name": "Key Type",
+      "Description": "The type of the key used by tag (p)."
+    },
+    {
+      "Tag": "p",
+      "TagValue": "",
+      "Name": "Public Key",
+      "Description": "The syntax and semantics of this tag value before being encoded in base64 are defined by the (k) tag."
+    }
+  ],
+  "Failed": [
+    {
+      "Name": "DKIM Public Key Check",
+      "Info": "Public key has been revoked"
+    }
+  ],
+  "Warnings": [],
+  "Passed": [
+    {
+      "Name": "DKIM Record Published",
+      "Info": "DKIM Record found"
+    },
+    {
+      "Name": "DKIM Syntax Check",
+      "Info": "The record is valid"
+    }
+  ]
+}

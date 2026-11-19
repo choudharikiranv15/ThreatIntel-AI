@@ -1,0 +1,31 @@
+Delivered-To: analyst@example.org
+Received: by 2002:a05:7300:5c0c:b0:12a:1b2c:3d4e with SMTP id x12csp1234567dyb;
+        Tue, 17 Nov 2026 09:15:04 -0800 (PST)
+ARC-Seal: i=1; a=rsa-sha256; t=1795367704; cv=none; d=google.com; s=arc-20240605; b=AAAA
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@gmail.com header.s=20230601 header.b=AbCdEf12;
+       spf=pass (google.com: domain of jane.sender@gmail.com designates 209.85.220.41 as permitted sender) smtp.mailfrom=jane.sender@gmail.com;
+       dmarc=pass (p=NONE sp=QUARANTINE dis=NONE) header.from=gmail.com
+Return-Path: <jane.sender@gmail.com>
+Received: from mail-sor-f41.google.com (mail-sor-f41.google.com. [209.85.220.41])
+        by mx.google.com with SMTPS id a1sor123456qkb.12.2026.11.17.09.15.03
+        for <analyst@example.org>
+        (Google Transport Security);
+        Tue, 17 Nov 2026 09:15:03 -0800 (PST)
+Received-SPF: pass (google.com: domain of jane.sender@gmail.com designates 209.85.220.41 as permitted sender) client-ip=209.85.220.41;
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=gmail.com; s=20230601; t=1795367703; x=1795972503;
+        h=to:subject:message-id:date:from:mime-version:from:to:cc:subject;
+        bh=abc123=; b=def456=
+Received: by 2002:a05:620a:1a2b:b0:7b1:2c3d:4e5f with SMTP id q11ls123456qkn.1;
+        Tue, 17 Nov 2026 09:15:02 -0800 (PST)
+MIME-Version: 1.0
+From: Jane Sender <jane.sender@gmail.com>
+Date: Tue, 17 Nov 2026 17:15:01 +0000
+Message-ID: <CAF1a2b3c4d5e6f7g8h9i0@mail.gmail.com>
+Subject: Quarterly report
+To: analyst@example.org, second.recipient@example.org
+Content-Type: text/plain; charset="UTF-8"
+
+This line is the body and must never be read as a header.
+Received: from attacker.example (evil [203.0.113.66]) by nowhere; Tue, 17 Nov 2026 09:00:00 -0800

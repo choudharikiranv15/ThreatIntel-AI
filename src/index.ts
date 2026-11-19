@@ -64,6 +64,7 @@ import {
 import { feedSettings, type FeedPluginConfig } from "./feed/runtime.js";
 import { buildFeedTools, FEED_TOOL_DEFINITIONS } from "./feed/tools.js";
 import { buildLookupTool, LOOKUP_TOOL_DEFINITION, lookupSettings, type LookupPluginConfig } from "./lookup/tool.js";
+import { buildHeaderTool, HEADER_TOOL_DEFINITION, headerAnalysisSettings, type HeaderAnalysisPluginConfig } from "./email/tool.js";
 
 /* The indicator lookup is built per session, so the hourly limit counts the real requester. */
 function lookupTool() {
@@ -77,6 +78,20 @@ function lookupTool() {
       toolContext: { senderIsOwner?: boolean; requesterSenderId?: string };
     }) =>
       buildLookupTool(toolContext, lookupSettings(config)) as unknown as AnyAgentTool,
+  };
+}
+
+function headerTool() {
+  return {
+    ...HEADER_TOOL_DEFINITION,
+    factory: ({
+      config,
+      toolContext,
+    }: {
+      config: HeaderAnalysisPluginConfig;
+      toolContext: { senderIsOwner?: boolean; requesterSenderId?: string };
+    }) =>
+      buildHeaderTool(toolContext, headerAnalysisSettings(config)) as unknown as AnyAgentTool,
   };
 }
 
@@ -205,6 +220,26 @@ const entry = defineToolPlugin({
 
     greynoiseApiKey: Type.Optional(
       Type.String({ description: "Optional GreyNoise API key; the community API works without one at a lower limit." }),
+    ),
+
+    mxtoolboxApiKey: Type.Optional(
+      Type.String({ description: "MXToolbox API key for the sender-domain SPF, DMARC, and DKIM checks in email header analysis. Without it, the headers are still analysed." }),
+    ),
+
+    headerDnsChecks: Type.Optional(
+      Type.Boolean({ description: "Check the sender domain's published SPF, DMARC, and DKIM records with MXToolbox during header analysis.", default: true }),
+    ),
+
+    mailCheckCacheHours: Type.Optional(
+      Type.Integer({ description: "Hours an MXToolbox answer is reused.", default: 24, minimum: 0, maximum: 168 }),
+    ),
+
+    mailCheckDailyBudget: Type.Optional(
+      Type.Integer({ description: "Most MXToolbox lookups per UTC day. The free plan allows 64.", default: 60, minimum: 0, maximum: 100000 }),
+    ),
+
+    headerAnalysesPerUserPerHour: Type.Optional(
+      Type.Integer({ description: "Most header analyses with DNS checks one person may start per hour.", default: 10, minimum: 1, maximum: 500 }),
     ),
 
     virustotalApiKey: Type.Optional(
@@ -714,6 +749,13 @@ const entry = defineToolPlugin({
      * ------------------------------------------------------------
      */
     tool(lookupTool()),
+
+    /*
+     * ------------------------------------------------------------
+     * Email header analysis, everyone (DNS checks limited per person and per day)
+     * ------------------------------------------------------------
+     */
+    tool(headerTool()),
   ],
 });
 

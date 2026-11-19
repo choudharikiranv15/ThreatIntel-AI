@@ -2,7 +2,7 @@
   "id": "threatintel-ai-engine",
   "name": "ThreatIntel AI Engine",
   "description": "Evidence-first threat intelligence investigation engine. Supports CVE investigations using NVD, CISA KEV, Red Hat Security Data API, and OSV, with source correlation and comparison over time. Provides vendor-specific product impact assessments and retrieval of previously persisted investigation context.",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "configSchema": {
     "type": "object",
     "properties": {
@@ -73,6 +73,36 @@
       "greynoiseApiKey": {
         "type": "string",
         "description": "Optional GreyNoise API key; the community API works without one at a lower limit."
+      },
+      "mxtoolboxApiKey": {
+        "type": "string",
+        "description": "MXToolbox API key for the sender-domain SPF, DMARC, and DKIM checks in email header analysis. Without it, the headers are still analysed."
+      },
+      "headerDnsChecks": {
+        "type": "boolean",
+        "description": "Check the sender domain's published SPF, DMARC, and DKIM records with MXToolbox during header analysis.",
+        "default": true
+      },
+      "mailCheckCacheHours": {
+        "type": "integer",
+        "description": "Hours an MXToolbox answer is reused.",
+        "default": 24,
+        "minimum": 0,
+        "maximum": 168
+      },
+      "mailCheckDailyBudget": {
+        "type": "integer",
+        "description": "Most MXToolbox lookups per UTC day. The free plan allows 64.",
+        "default": 60,
+        "minimum": 0,
+        "maximum": 100000
+      },
+      "headerAnalysesPerUserPerHour": {
+        "type": "integer",
+        "description": "Most header analyses with DNS checks one person may start per hour.",
+        "default": 10,
+        "minimum": 1,
+        "maximum": 500
       },
       "virustotalApiKey": {
         "type": "string",
@@ -262,7 +292,8 @@
       "threatintel_watch_status",
       "threatintel_feed_status",
       "threatintel_feed_run_now",
-      "threatintel_lookup_indicator"
+      "threatintel_lookup_indicator",
+      "threatintel_analyze_email_headers"
     ]
   },
   "toolMetadata": {

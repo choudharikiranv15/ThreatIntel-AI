@@ -1,0 +1,14 @@
+Received: from DM6PR01MB1234.prod.exchangelabs.com (2603:10b6:5:1::11) by SN6PR01MB5678.prod.exchangelabs.com with HTTPS; Thu, 19 Nov 2026 06:10:12 +0000
+Authentication-Results: spf=pass (sender IP is 40.92.18.55)
+ smtp.mailfrom=outlook.com; dkim=pass (signature was verified)
+ header.d=outlook.com;dmarc=fail action=none header.from=contoso-billing.com;compauth=fail
+ reason=001
+Received-SPF: Pass (protection.outlook.com: domain of outlook.com designates 40.92.18.55 as permitted sender) receiver=protection.outlook.com; client-ip=40.92.18.55; helo=NAM10-DM6-obe.outbound.protection.outlook.com;
+Received: from NAM10-DM6-obe.outbound.protection.outlook.com (40.92.18.55) by DM6PR01MB1234.mail.protection.outlook.com (10.13.14.15) with Microsoft SMTP Server; Thu, 19 Nov 2026 06:10:10 +0000
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=outlook.com; s=selector1; h=From:Date:Subject; bh=xyz=; b=abc=
+From: Accounts Payable <ap@contoso-billing.com>
+Return-Path: ap.contoso@outlook.com
+To: finance@example.org
+Subject: Updated bank details for invoice 4471
+Date: Thu, 19 Nov 2026 06:10:05 +0000
+Message-ID: <DM6PR01MB9999.namprd01.prod.outlook.com>

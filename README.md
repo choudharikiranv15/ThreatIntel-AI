@@ -6,6 +6,7 @@ An evidence-first threat intelligence plugin for [OpenClaw](https://github.com/o
 - **CVE watchlist.** Re-investigates chosen CVEs on a schedule and alerts a Discord channel when their intelligence actually changes.
 - **Threat feed.** Every 3 hours, collects advisories from CISA, major vendors, and research publications, prioritises them for a Bio/Pharma SOC, and posts only what is worth hunting.
 - **Indicator lookup.** Checks an IP address, domain, URL, or file hash against AbuseIPDB, GreyNoise, Shodan InternetDB, AlienVault OTX, and VirusTotal.
+- **Email header analysis.** Reads the receiving server's SPF, DKIM, and DMARC results, sender mismatches, and the Received chain from pasted headers, and checks the sender domain's published records with MXToolbox.
 
 The model is the reasoning layer, never the source of truth. Every fact comes from a retrieved source, a deterministic check compares the model's answer with that evidence before it is sent, and nothing is invented: no MITRE ATT&CK mappings, detection claims, or indicators that a source did not publish.
 
@@ -93,6 +94,7 @@ For a new database, apply `db/schema.sql`, then every file in `db/migrations/` i
 | `004_app_role.sql` | `threatintel_app`, a least-privilege role for the plugin | Recommended for every deployment; see [Security](#security). |
 | `005_indicator_lookups.sql` | `indicator_lookups`: lookup cache, quota ledger, and audit trail | v0.7, for indicator lookups |
 | `006_virustotal_and_urls.sql` | VirusTotal and URL lookups in `indicator_lookups` | v0.8. Without it, lookups that reach VirusTotal or take a URL fail to record. |
+| `007_mail_checks.sql` | `mail_checks`: MXToolbox cache, quota ledger, and record | v0.9, for the DNS checks in email header analysis |
 
 Each migration runs in one transaction and enables row-level security. Only the plugin's own role gets a policy, so Supabase's `anon` and `authenticated` Data API roles see no rows.
 
@@ -394,6 +396,33 @@ Concepts come from a reviewed list in `src/feed/concepts.ts`, in order, and are 
 - **Keys** are sent only in request headers and never appear in URLs, errors, or results.
 - **Record.** Every lookup is stored in `indicator_lookups` with the service, status, and time, for 90 days, so you can see what was sent where.
 
+## Email header analysis
+
+`threatintel_analyze_email_headers` takes the full header block of one message, pasted or as an attached text file (Discord turns long pastes into `message.txt`, which the bot can read).
+
+The headers are analysed on the gateway:
+
+- **Authentication.** SPF, DKIM, and DMARC (and Microsoft's composite authentication) as the receiving server recorded them. Only the topmost `Authentication-Results` header is used: lower ones may have been written by the sender, and are reported as ignored.
+- **Sender identity.** From, Return-Path, Reply-To, and display name are compared by organisational domain: a reply address at another domain, a display name showing a different address, DKIM signed only by another domain, or a mismatched envelope sender are reported, each with its evidence.
+- **Route.** The Received chain from first hop to last, with delays, timestamps that run backwards, and the earliest public address as the likely sending server, which can then be looked up with the indicator lookup.
+- **Sender domain DNS.** With `mxtoolboxApiKey`, the From domain's SPF and DMARC records and the signing domain's DKIM key are checked with MXToolbox: whether they are published, the DMARC policy, the SPF `all` qualifier, and MXToolbox's own warnings.
+
+Passing authentication shows which domain sent a message, not that it is benign; the bot never calls a message safe on that basis, and the answer gate flags an answer that misstates an SPF, DKIM, or DMARC result.
+
+**Privacy.** Recipient addresses are counted, never returned. The headers are neither stored nor sent anywhere; only the sender domain (and DKIM selector) is sent to MXToolbox, and only when it is a public domain. `mail_checks` records the domain, the check, and its result for 90 days.
+
+**Limits.** The free MXToolbox plan allows 64 DNS lookups a day and no blacklist or SMTP checks. Each analysis uses up to three, answers are reused for `mailCheckCacheHours`, the day's total is capped by `mailCheckDailyBudget`, and each person by `headerAnalysesPerUserPerHour`. When a limit is reached, the local analysis still runs.
+
+| Field | Default | Meaning |
+|---|---|---|
+| `mxtoolboxApiKey` | none | MXToolbox key. Without it, the headers are analysed but the sender domain's records are not checked. |
+| `headerDnsChecks` | `true` | Check the sender domain's records with MXToolbox. |
+| `mailCheckCacheHours` | `24` | How long an MXToolbox answer is reused. |
+| `mailCheckDailyBudget` | `60` | Most MXToolbox lookups per UTC day. |
+| `headerAnalysesPerUserPerHour` | `10` | Most analyses with DNS checks one person may start per hour. |
+
+Add the key with `bash ~/ThreatIntel-AI/deploy/gcp/rotate-secret.sh mxtoolbox < key.txt`; it is checked against MXToolbox's usage endpoint, which spends no lookups.
+
 ## Security
 
 The bot is reachable by everyone in your Discord server, so the deployment is locked down rather than relying on OpenClaw's single-user defaults:
@@ -462,6 +491,7 @@ src/
   watch/             Watchlist, shared background service, outbox delivery
   feed/              Threat feed: sources, classification, IOCs, selection
   lookup/            Indicator lookup: input handling, services, limits
+  email/             Email header analysis and MXToolbox checks
 db/                  Schema and migrations
 deploy/gcp/          Google Cloud deployment and spending cap
 test-fixtures/        Recorded feed and lookup samples for tests

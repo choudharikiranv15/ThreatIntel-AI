@@ -1,0 +1,16 @@
+{
+  "_fixture": "Written from the MXToolbox API documentation's response shape: a domain with no DMARC record.",
+  "Command": "dmarc",
+  "CommandArgument": "no-dmarc.example",
+  "IsError": false,
+  "Records": [],
+  "Information": [],
+  "Failed": [
+    {
+      "Name": "DMARC Record Published",
+      "Info": "No DMARC Record found"
+    }
+  ],
+  "Warnings": [],
+  "Passed": []
+}

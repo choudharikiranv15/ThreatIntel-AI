@@ -1,0 +1,59 @@
+{
+  "_fixture": "Recorded from the MXToolbox API on 2026-11-19 and trimmed to the fields the parser reads.",
+  "Command": "dmarc",
+  "CommandArgument": "google.com",
+  "IsError": false,
+  "Records": [
+    "v=DMARC1; p=reject; rua=mailto:mailauth-reports@google.com"
+  ],
+  "Information": [
+    {
+      "Tag": "",
+      "TagValue": "",
+      "Name": "record",
+      "Description": "v=DMARC1; p=reject; rua=mailto:mailauth-reports@google.com"
+    },
+    {
+      "Tag": "v",
+      "TagValue": "DMARC1",
+      "Name": "Version",
+      "Description": "Identifies the record retrieved as a DMARC record. It must be the first tag in the list."
+    },
+    {
+      "Tag": "p",
+      "TagValue": "reject",
+      "Name": "Policy",
+      "Description": "Policy to apply to email that fails the DMARC test. Valid values can be &#39;none&#39;, &#39;quarantine&#39;, or &#39;reject&#39;."
+    },
+    {
+      "Tag": "rua",
+      "TagValue": "mailto:mailauth-reports@google.com",
+      "Name": "Receivers",
+      "Description": "Addresses to which aggregate feedback is to be sent. Comma separated plain-text list of DMARC URIs."
+    }
+  ],
+  "Failed": [],
+  "Warnings": [],
+  "Passed": [
+    {
+      "Name": "DMARC Record Published",
+      "Info": "DMARC Record found"
+    },
+    {
+      "Name": "DMARC Syntax Check",
+      "Info": "The record is valid"
+    },
+    {
+      "Name": "DMARC Multiple Records",
+      "Info": "Multiple DMARC records corrected to a single record."
+    },
+    {
+      "Name": "DMARC Policy Not Enabled",
+      "Info": "DMARC Quarantine/Reject policy enabled"
+    },
+    {
+      "Name": "DMARC External Validation",
+      "Info": "All external domains in your DMARC record are giving permission to send them DMARC reports."
+    }
+  ]
+}

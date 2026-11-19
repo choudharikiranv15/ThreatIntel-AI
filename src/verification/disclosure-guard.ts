@@ -78,7 +78,7 @@ const RULES: { category: DisclosureCategory; pattern: RegExp }[] = [
 
     /* Settings keys and environment variable names. */
     { category: "configuration", pattern: /\b(?:agents\.defaults|agents\.list|plugins\.entries|channels\.discord|tools\.(?:profile|exec|deny|alsoAllow|allow)|hooks\.allow\w*)\b/ },
-    { category: "configuration", pattern: /\b(?:allowConversationAccess|allowPromptInjection|bootstrapMaxChars|default_model|(?:abuseipdb|greynoise|otx|nvd|virustotal)ApiKey)\b/i },
+    { category: "configuration", pattern: /\b(?:allowConversationAccess|allowPromptInjection|bootstrapMaxChars|default_model|(?:abuseipdb|greynoise|otx|nvd|virustotal|mxtoolbox)ApiKey)\b/i },
     { category: "configuration", pattern: /\b(?:THREATINTEL_[A-Z0-9_]+|DISCORD_BOT_TOKEN|OPENROUTER_API_KEY|NVD_API_KEY|PGPASSWORD)\b/ },
 
     /* Model identifiers: provider/model slugs and OpenRouter free-tier ids. */

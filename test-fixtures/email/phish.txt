@@ -1,0 +1,23 @@
+Received: from mx1.example.org (10.20.30.40) by mbx01.example.org (10.20.30.41) with Microsoft SMTP Server id 15.2.1544.4; Wed, 18 Nov 2026 08:02:10 +0000
+Authentication-Results: mx1.example.org;
+	spf=softfail (example.org: domain of transitioning billing@paypa1-secure.com does not designate 185.220.101.47 as permitted sender) smtp.mailfrom=billing@paypa1-secure.com;
+	dkim=none (message not signed) header.d=none;
+	dmarc=fail action=quarantine header.from=paypal.com
+Received: from vps-4471.hosting-cheap.example (unknown [185.220.101.47])
+	by mx1.example.org (Postfix) with ESMTP id 4F2A1B;
+	Wed, 18 Nov 2026 08:02:05 +0000 (UTC)
+Authentication-Results: mx.paypal.com; spf=pass smtp.mailfrom=paypal.com; dkim=pass header.d=paypal.com; dmarc=pass header.from=paypal.com
+Received: from localhost (localhost [127.0.0.1])
+	by vps-4471.hosting-cheap.example with SMTP;
+	Wed, 18 Nov 2026 08:20:00 +0000
+X-Originating-IP: [45.153.160.2]
+Return-Path: <billing@paypa1-secure.com>
+From: "service@paypal.com" <billing@paypa1-secure.com>
+Reply-To: PayPal Support <recovery@paypal-help-desk.example>
+To: victim.one@example.org, victim.two@example.org
+Cc: victim.three@example.org
+Subject: =?UTF-8?B?WW91ciBhY2NvdW50IGhhcyBiZWVuIGxpbWl0ZWQ=?=
+Date: Wed, 18 Nov 2026 08:01:55 +0000
+Message-ID: <20261118080155.12345@vps-4471.hosting-cheap.example>
+MIME-Version: 1.0
+Content-Type: text/html; charset=UTF-8
