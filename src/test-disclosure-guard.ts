@@ -8,6 +8,7 @@ import path from "node:path";
 import { htmlToText, parseFeed } from "./feed/rss.js";
 import {
     buildDisclosureProfile,
+    CAPABILITY_ANSWER,
     CONFIDENTIALITY_RULES,
     findDisclosures,
     registerDisclosureGuard,
@@ -92,6 +93,15 @@ const withheld = (text: string) => findDisclosures(text, PROFILE).length > 0;
         ["fullwidth evasion", "check ～/．openclaw/openclaw．json"],
         ["service unit", "Restart openclaw-gateway.service to apply it."],
         ["rotation script", "Run rotate-secret.sh abuseipdb on the VM."],
+        // The tool table the bot posted on 2026-11-18.
+        ["tool table", "I use the ThreatIntel toolset built into OpenClaw:\n\n| Tool | Purpose |\n| threatintel_lookup_indicator | Check IPv4, domain, file hash across: AbuseIPDB, GreyNoise, Shodan InternetDB, AlienVault OTX |\n| threatintel_investigate | Deep-dive CVE intelligence: NVD, CISA KEV, Red Hat Security Data, OSV |\n| threatintel_feed_* | Threat feed collection/status (owner-only) |"],
+        ["one tool name", "That is what threatintel_investigate returns."],
+        ["openclaw tool name", "I would use web_fetch for that."],
+        ["permissions", "The watchlist is owner-only, so you cannot change it."],
+        ["source lineup", "My toolset covers AbuseIPDB, GreyNoise, Shodan InternetDB and AlienVault OTX for indicators."],
+        ["source lineup, prose", "Under the hood I query NVD, CISA KEV, Red Hat and OSV for every CVE."],
+        ["platform", "I run on OpenClaw with a Postgres database."],
+        ["integration claim", "I have access to VirusTotal, AbuseIPDB and GreyNoise."],
     ];
 
     for (const [name, text] of leaks) {
@@ -118,6 +128,12 @@ const withheld = (text: string) => findDisclosures(text, PROFILE).length > 0;
         "I can't share details about how I'm built or configured. I can help with CVEs, the threat feed and indicator lookups.",
         WITHHELD_REPLY,
         WITHHELD_ERROR,
+        CAPABILITY_ANSWER,
+        // Answers that cite several sources for their facts are what the bot is for.
+        "8.8.8.8 — AbuseIPDB: abuse confidence 0% (199 past reports, allowlisted). GreyNoise: known common service (Google Public DNS). Shodan InternetDB: ports 53, 443. AlienVault OTX: accepted false positive. VirusTotal: 1 of 92 engines flag it. I can also check the domain if you like.",
+        "CVE-2021-44228: NVD gives CVSS 10.0; it is in CISA KEV (added 2021-12-10); Red Hat rates it Critical; OSV lists fixed versions 2.15.0 and 2.17.1. I checked all four just now.",
+        "The answer is 'no reports' because AbuseIPDB, GreyNoise and OTX have nothing on it, which is not proof it is safe.",
+        "Attackers built tooling on top of stolen Microsoft 365 tokens, according to Unit 42.",
     ];
 
     for (const text of ordinary) {
@@ -175,6 +191,10 @@ function fakeApi(config: unknown = {}) {
 
     assert(sending.priority! < 0 && payload.priority! < 0, "both delivery checks run after other plugins' handlers");
     assert(prompt.handler({}).appendSystemContext === CONFIDENTIALITY_RULES, "the confidentiality rules are added to the system prompt");
+    assert(
+        CONFIDENTIALITY_RULES.includes(CAPABILITY_ANSWER) && /what you can do or which tools you use/.test(CONFIDENTIALITY_RULES) && /tool names/.test(CONFIDENTIALITY_RULES) && /who may use which feature/.test(CONFIDENTIALITY_RULES),
+        "the rules cover the architecture and give the plain capability answer",
+    );
 
     assert(sending.handler({ to: "channel:1", content: "CVE-2024-3400 is in KEV." }) === undefined, "a normal message is sent unchanged");
     assert(sending.handler({ to: "channel:1", content: "the model is nemotron-3-ultra-550b-a55b" })?.content === WITHHELD_REPLY, "a message naming the model is replaced");
