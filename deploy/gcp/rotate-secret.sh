@@ -8,6 +8,9 @@
 #   bash rotate-secret.sh abuseipdb    # AbuseIPDB key for indicator lookups (also greynoise, otx)
 #   bash rotate-secret.sh db           # new password for the plugin's database role
 #   bash rotate-secret.sh openrouter   # new OpenRouter key (OpenClaw's own prompt)
+#
+# A key can also come from a file instead of the prompt (delete the file after):
+#   bash rotate-secret.sh abuseipdb < ~/key.txt
 set -euo pipefail
 umask 077
 export PATH="$HOME/.npm-global/bin:$PATH"
@@ -22,8 +25,11 @@ backup() {
 }
 
 ask() {
-    local value
-    read -rsp "$1: " value
+    local value=""
+    # A value read from a file may lack a final newline: read then returns 1
+    # with the value already set, which must not end the script silently.
+    IFS= read -rsp "$1: " value || true
+    value="${value%$'\r'}"
     echo >&2
     [ -n "${value//[[:space:]]/}" ] || { echo "Nothing entered (a paste may not have arrived); nothing changed." >&2; exit 1; }
     printf '%s' "$value"
@@ -73,7 +79,7 @@ if (config.channels?.discord && "token" in config.channels.discord) {
         field=$(case "$1" in nvd) echo nvdApiKey;; abuseipdb) echo abuseipdbApiKey;; greynoise) echo greynoiseApiKey;; otx) echo otxApiKey;; esac)
         backup "$S/openclaw.json"
         # The key is trimmed, checked against the service, and saved only if it was not rejected.
-        ask "New $1 API key" | node -e '
+        if ! ask "New $1 API key" | node -e '
 const fs = require("fs");
 const [file, field, service] = process.argv.slice(1);
 const value = fs.readFileSync(0, "utf8").trim();
@@ -105,7 +111,11 @@ const checks = {
     config.plugins.entries["threatintel-ai-engine"].config[field] = value;
     fs.writeFileSync(file, JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
 })();
-' "$S/openclaw.json" "$field" "$1"
+' "$S/openclaw.json" "$field" "$1"; then
+            # Nothing was saved, so the backup is identical and only adds a copy of the secrets.
+            rm -f "$S/openclaw.json.before-rotate-$stamp"
+            exit 1
+        fi
         restart
         ;;
     db)
