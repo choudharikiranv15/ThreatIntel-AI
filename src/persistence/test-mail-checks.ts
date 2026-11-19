@@ -64,7 +64,8 @@ async function main(): Promise<void> {
         const settings = { ...headerAnalysisSettings({ mxtoolboxApiKey: "test-key-not-real" }), perUserPerHour: 5 };
         const first = (await runHeaderAnalysis(headers, `${who}-b`, settings, { fetchRecord })) as HeaderAnalysisPayload;
 
-        assert(first.dnsChecks.length === 3 && first.dnsChecks.filter((c) => c.cached).length === 1 && calls === 2, `cached DMARC is reused, SPF and DKIM are fetched: ${calls}`);
+        // DMARC and SPF were recorded successfully above, so only the DKIM key is fetched.
+        assert(first.dnsChecks.length === 3 && first.dnsChecks.filter((c) => c.cached).length === 2 && calls === 1, `cached DMARC and SPF are reused, DKIM is fetched: ${calls}`);
 
         const { rows } = await db.query("SELECT count(*)::int AS n FROM public.mail_checks WHERE requested_by = $1", [`${who}-b`]);
         const stored = await db.query("SELECT facts::text AS f, argument FROM public.mail_checks WHERE requested_by = $1", [`${who}-b`]);
