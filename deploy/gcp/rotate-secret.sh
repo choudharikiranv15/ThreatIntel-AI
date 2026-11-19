@@ -5,7 +5,7 @@
 #
 #   bash rotate-secret.sh discord      # new Discord bot token
 #   bash rotate-secret.sh nvd          # new NVD API key
-#   bash rotate-secret.sh abuseipdb    # AbuseIPDB key for indicator lookups (also greynoise, otx)
+#   bash rotate-secret.sh abuseipdb    # AbuseIPDB key for indicator lookups (also greynoise, otx, virustotal)
 #   bash rotate-secret.sh db           # new password for the plugin's database role
 #   bash rotate-secret.sh openrouter   # new OpenRouter key (OpenClaw's own prompt)
 #
@@ -75,8 +75,8 @@ if (config.channels?.discord && "token" in config.channels.discord) {
         unset token
         restart
         ;;
-    nvd|abuseipdb|greynoise|otx)
-        field=$(case "$1" in nvd) echo nvdApiKey;; abuseipdb) echo abuseipdbApiKey;; greynoise) echo greynoiseApiKey;; otx) echo otxApiKey;; esac)
+    nvd|abuseipdb|greynoise|otx|virustotal)
+        field=$(case "$1" in nvd) echo nvdApiKey;; abuseipdb) echo abuseipdbApiKey;; greynoise) echo greynoiseApiKey;; otx) echo otxApiKey;; virustotal) echo virustotalApiKey;; esac)
         backup "$S/openclaw.json"
         # The key is trimmed, checked against the service, and saved only if it was not rejected.
         if ! ask "New $1 API key" | node -e '
@@ -84,7 +84,7 @@ const fs = require("fs");
 const [file, field, service] = process.argv.slice(1);
 const value = fs.readFileSync(0, "utf8").trim();
 if (!value) process.exit(1); // The prompt has already said why.
-const formats = { abuseipdb: /^[0-9a-f]{80}$/i, otx: /^[0-9a-f]{64}$/i, nvd: /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i };
+const formats = { abuseipdb: /^[0-9a-f]{80}$/i, otx: /^[0-9a-f]{64}$/i, virustotal: /^[0-9a-f]{64}$/i, nvd: /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i };
 if (value.length < 16 || /\s/.test(value)) {
     console.error("That is not a key: the paste may not have arrived (right-click or Ctrl+Shift+V to paste). Nothing changed.");
     process.exit(1);
@@ -95,6 +95,7 @@ if (formats[service] && !formats[service].test(value)) {
 const checks = {
     abuseipdb: ["https://api.abuseipdb.com/api/v2/check?ipAddress=8.8.8.8", { Key: value, Accept: "application/json" }],
     otx: ["https://otx.alienvault.com/api/v1/user/me", { "X-OTX-API-KEY": value }],
+    virustotal: ["https://www.virustotal.com/api/v3/ip_addresses/8.8.8.8", { "x-apikey": value }],
     greynoise: ["https://api.greynoise.io/v3/community/8.8.8.8", { key: value }],
     nvd: ["https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2021-44228", { apiKey: value }],
 };

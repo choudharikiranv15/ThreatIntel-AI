@@ -13,6 +13,7 @@ const SOURCE_PATTERNS: Record<LookupSourceId, RegExp> = {
     greynoise: /\bgrey ?noise\b/i,
     internetdb: /\b(shodan|internetdb)\b/i,
     otx: /\b(otx|alien ?vault)\b/i,
+    virustotal: /\b(virus ?total|VT)\b/i,
 };
 
 const SAFE_CLAIM = /\b(is|are|appears?(?: to be)?|looks?|seems?|considered)\s+(safe|clean|benign|harmless|legitimate|trustworthy|not malicious)\b/i;
@@ -97,7 +98,16 @@ export function checkIndicatorAnswer(answer: string, lookups: LookupPayload[]): 
                 }
             }
 
-            /* 4. OTX report count. */
+            /* 4. VirusTotal detection count. */
+            if (source === "virustotal" && SOURCE_PATTERNS.virustotal.test(segment) && !SOURCE_PATTERNS.abuseipdb.test(segment) && !SOURCE_PATTERNS.otx.test(segment)) {
+                const finding = checkVirusTotalCounts(segment, facts, label);
+
+                if (finding) {
+                    findings.add(finding);
+                }
+            }
+
+            /* 5. OTX report count. */
             if (source === "otx" && !SOURCE_PATTERNS.abuseipdb.test(segment)) {
                 const pulses = segment.match(/(\d[\d,]*)\s+(?:otx\s+|community\s+)?(?:pulses?|reports?)\b/i);
 
@@ -113,6 +123,27 @@ export function checkIndicatorAnswer(answer: string, lookups: LookupPayload[]): 
     }
 
     return Array.from(findings);
+}
+
+/** "12 of 93", "12/93", or "12 engines" in a sentence about VirusTotal: the first number is the detection count. */
+function quotedDetections(segment: string): number | null {
+    const match =
+        segment.match(/\b(\d{1,3})\s*(?:\/|of|out of)\s*\d{1,3}\b/i) ??
+        segment.match(/\b(\d{1,3})\s+(?:security\s+)?(?:engines|vendors|scanners|detections)\b/i);
+
+    return match ? Number(match[1]) : null;
+}
+
+export function checkVirusTotalCounts(segment: string, facts: Record<string, unknown>, label: string): string | null {
+    const quoted = quotedDetections(segment);
+
+    if (quoted === null || !/\b(malicious|flag|flagged|detect|detected|detections)\b/i.test(segment)) {
+        return null;
+    }
+
+    const actual = /\bsuspicious\b/i.test(segment) && !/\bmalicious\b/i.test(segment) ? Number(facts.suspicious ?? 0) : Number(facts.malicious ?? 0);
+
+    return quoted === actual ? null : `${label}: the answer gives ${quoted} VirusTotal detections, but the lookup returned ${actual} of ${facts.engines ?? "?"} engines.`;
 }
 
 /** A lookup result as the tool returns it, or null. */

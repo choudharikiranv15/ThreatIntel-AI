@@ -5,7 +5,7 @@ An evidence-first threat intelligence plugin for [OpenClaw](https://github.com/o
 - **CVE investigation.** Retrieves NVD, CISA KEV, Red Hat, and OSV evidence, compares the sources, and returns facts that each trace back to retrieved evidence.
 - **CVE watchlist.** Re-investigates chosen CVEs on a schedule and alerts a Discord channel when their intelligence actually changes.
 - **Threat feed.** Every 3 hours, collects advisories from CISA, major vendors, and research publications, prioritises them for a Bio/Pharma SOC, and posts only what is worth hunting.
-- **Indicator lookup.** Checks an IP address, domain, or file hash against AbuseIPDB, GreyNoise, Shodan InternetDB, and AlienVault OTX.
+- **Indicator lookup.** Checks an IP address, domain, URL, or file hash against AbuseIPDB, GreyNoise, Shodan InternetDB, AlienVault OTX, and VirusTotal.
 
 The model is the reasoning layer, never the source of truth. Every fact comes from a retrieved source, a deterministic check compares the model's answer with that evidence before it is sent, and nothing is invented: no MITRE ATT&CK mappings, detection claims, or indicators that a source did not publish.
 
@@ -92,6 +92,7 @@ For a new database, apply `db/schema.sql`, then every file in `db/migrations/` i
 | `003_threat_feed.sql` | Feed tables; a `channel` column on `watch_events` | v0.6. Without it, watch alerts fail as well as the feed. |
 | `004_app_role.sql` | `threatintel_app`, a least-privilege role for the plugin | Recommended for every deployment; see [Security](#security). |
 | `005_indicator_lookups.sql` | `indicator_lookups`: lookup cache, quota ledger, and audit trail | v0.7, for indicator lookups |
+| `006_virustotal_and_urls.sql` | VirusTotal and URL lookups in `indicator_lookups` | v0.8. Without it, lookups that reach VirusTotal or take a URL fail to record. |
 
 Each migration runs in one transaction and enables row-level security. Only the plugin's own role gets a policy, so Supabase's `anon` and `authenticated` Data API roles see no rows.
 
@@ -180,12 +181,16 @@ All settings live under `plugins.entries.threatintel-ai-engine.config`. Lists ar
 | `abuseipdbApiKey` | none | AbuseIPDB key. Without it, AbuseIPDB is reported as not checked. |
 | `greynoiseApiKey` | none | Optional; the GreyNoise community API works without a key at a lower limit. |
 | `otxApiKey` | none | Optional; OTX works without a key at a lower limit. |
-| `lookupSources` | all | Enabled services: `internetdb`, `greynoise`, `abuseipdb`, `otx`. |
+| `virustotalApiKey` | none | VirusTotal key. Without it, VirusTotal is reported as not checked. |
+| `virustotalPerMinute` | `4` | Most VirusTotal requests per minute (the public API allows 4). |
+| `lookupSources` | all | Enabled services: `internetdb`, `greynoise`, `abuseipdb`, `otx`, `virustotal`. |
 | `lookupCacheHours` | `12` | How long an answer is reused before the service is asked again. |
 | `lookupPerUserPerHour` | `20` | Most lookups one person may start per hour. |
-| `lookupDailyBudgets` | internetdb 2000, greynoise 50, abuseipdb 900, otx 1000 | Most calls per service per UTC day. |
+| `lookupDailyBudgets` | internetdb 2000, greynoise 50, abuseipdb 900, otx 1000, virustotal 450 | Most calls per service per UTC day. |
 
-Add a key without it appearing on screen: `bash ~/ThreatIntel-AI/deploy/gcp/rotate-secret.sh abuseipdb` (also `greynoise`, `otx`).
+Add a key without it appearing on screen: `bash ~/ThreatIntel-AI/deploy/gcp/rotate-secret.sh abuseipdb` (also `greynoise`, `otx`, `virustotal`), or from a file with `... abuseipdb < key.txt`. The key is checked with the service and saved only if it is accepted.
+
+VirusTotal's public API is for non-commercial use and allows 4 requests a minute and 500 a day; use a premium key for commercial work.
 
 ## CVE investigation
 
@@ -370,19 +375,21 @@ Concepts come from a reviewed list in `src/feed/concepts.ts`, in order, and are 
 
 ## Indicator lookup
 
-`threatintel_lookup_indicator` takes one IPv4 address, domain, or file hash. Defanged input such as `194.127.178[.]21` or `hxxp://evil[.]com` is accepted, and a URL is looked up by its host only.
+`threatintel_lookup_indicator` takes one IPv4 address, domain, URL, or file hash. Defanged input such as `194.127.178[.]21` or `hxxp://evil[.]com/login` is accepted. A URL is looked up as a whole, with any credentials and the fragment removed; its host is looked up separately.
 
 | Service | Covers | Key |
 |---|---|---|
 | Shodan InternetDB | IP: open ports, hostnames, known vulnerabilities | None |
 | GreyNoise | IP: internet-wide scanner or known common service | Optional |
 | AbuseIPDB | IP: abuse reports and confidence score | Required |
-| AlienVault OTX | IP, domain, hash: community threat reports and known false positives | Optional |
+| AlienVault OTX | IP, domain, URL, hash: community threat reports and known false positives | Optional |
+| VirusTotal | IP, domain, URL, hash: engine verdict counts, the engines that flagged it, file labels | Required |
 
-- **Nothing private leaves the gateway.** Private, loopback, link-local (including the cloud metadata address), shared, multicast, documentation, and reserved IPv4 ranges, and internal names such as `.local`, `.internal`, and `.corp`, are refused before any request. IPv6 is not supported yet.
-- **Results are evidence, not verdicts.** The summary keeps threat reports (AbuseIPDB reports, OTX reports, GreyNoise "malicious"), exposure data (open ports, which show what is reachable, not that it is malicious), and known-benign markers (GreyNoise common services, OTX accepted false positives, the AbuseIPDB allowlist) apart, and names every service that was not checked and why.
-- **No record is not safe.** A service with no record is reported as "no reports", never "safe" or "clean". The answer gate flags an answer that calls an indicator safe without a known-benign marker, describes a result from a service that was not checked, or misquotes an AbuseIPDB score or report count or an OTX report count.
-- **Untrusted text.** OTX report names and tags are written by the community and are marked untrusted in the result.
+- **Nothing private leaves the gateway.** Private, loopback, link-local (including the cloud metadata address), shared, multicast, documentation, and reserved IPv4 ranges, and internal names such as `.local`, `.internal`, and `.corp`, are refused before any request, including as the host of a URL. IPv6 is not supported yet.
+- **Read only.** Existing reports are read; nothing is ever submitted to VirusTotal or any other service for scanning, so a lookup never makes a URL or file public.
+- **Results are evidence, not verdicts.** The summary keeps threat reports (AbuseIPDB reports with a confidence above 0%, OTX reports, GreyNoise "malicious", VirusTotal engines flagging it malicious, given as "12 of 93 engines"), low-confidence signals (AbuseIPDB reports it rates 0%, VirusTotal "suspicious" only), no detections (a VirusTotal scan with none), exposure data (open ports, which show what is reachable, not that it is malicious), and known-benign markers (GreyNoise common services, OTX accepted false positives, the AbuseIPDB allowlist) apart, and names every service that was not checked and why.
+- **No record is not safe.** A service with no record is reported as "no reports", never "safe" or "clean". The answer gate flags an answer that calls an indicator safe without a known-benign marker, describes a result from a service that was not checked, or misquotes an AbuseIPDB score or report count, an OTX report count, or a VirusTotal detection count.
+- **Untrusted text.** OTX report names and tags are written by the community and are marked untrusted in the result; so are web page titles from VirusTotal.
 - **Limits.** Each person may start `lookupPerUserPerHour` lookups an hour; the requester comes from OpenClaw, never from the model's arguments. Each service has a daily budget; answers within `lookupCacheHours` are reused and do not use it. Failures are never cached.
 - **Keys** are sent only in request headers and never appear in URLs, errors, or results.
 - **Record.** Every lookup is stored in `indicator_lookups` with the service, status, and time, for 90 days, so you can see what was sent where.

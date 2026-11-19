@@ -1,0 +1,116 @@
+{
+  "_fixture": "Recorded from the VirusTotal API v3 on 2026-11-19 and trimmed to the fields the parser reads.",
+  "data": {
+    "id": "6169809e4909da9938cca76cf2de9fcf9b834ecff069ac9efb862d8b2b7870d7",
+    "type": "url",
+    "attributes": {
+      "last_analysis_stats": {
+        "malicious": 12,
+        "suspicious": 1,
+        "undetected": 31,
+        "harmless": 49,
+        "timeout": 0
+      },
+      "last_analysis_date": 1794694708,
+      "reputation": 22,
+      "total_votes": {
+        "harmless": 41,
+        "malicious": 23
+      },
+      "tags": [],
+      "categories": {
+        "BitDefender": "computersandsoftware",
+        "Xcitium Verdict Cloud": "computing & technology",
+        "Sophos": "spyware and malware",
+        "Forcepoint ThreatSeeker": "computer security"
+      },
+      "url": "http://www.eicar.org/download/eicar.com.txt",
+      "last_final_url": "https://www.eicar.org/download/eicar.com.txt",
+      "title": "",
+      "threat_names": [
+        "Mal/HTMLGen-A"
+      ],
+      "last_http_response_code": 200,
+      "last_analysis_results": {
+        "Lionic": {
+          "method": "blacklist",
+          "engine_name": "Lionic",
+          "category": "malicious",
+          "result": "malware"
+        },
+        "Antiy-AVL": {
+          "method": "blacklist",
+          "engine_name": "Antiy-AVL",
+          "category": "malicious",
+          "result": "malicious"
+        },
+        "AutoShun": {
+          "method": "blacklist",
+          "engine_name": "AutoShun",
+          "category": "malicious",
+          "result": "malicious"
+        },
+        "BitDefender": {
+          "method": "blacklist",
+          "engine_name": "BitDefender",
+          "category": "malicious",
+          "result": "malware"
+        },
+        "Bkav": {
+          "method": "blacklist",
+          "engine_name": "Bkav",
+          "category": "malicious",
+          "result": "malicious"
+        },
+        "Chong Lua Dao": {
+          "method": "blacklist",
+          "engine_name": "Chong Lua Dao",
+          "category": "malicious",
+          "result": "malicious"
+        },
+        "CyRadar": {
+          "method": "blacklist",
+          "engine_name": "CyRadar",
+          "category": "malicious",
+          "result": "malware"
+        },
+        "Fortinet": {
+          "method": "blacklist",
+          "engine_name": "Fortinet",
+          "category": "malicious",
+          "result": "malware"
+        },
+        "G-Data": {
+          "method": "blacklist",
+          "engine_name": "G-Data",
+          "category": "malicious",
+          "result": "malware"
+        },
+        "Gridinsoft": {
+          "method": "blacklist",
+          "engine_name": "Gridinsoft",
+          "category": "suspicious",
+          "result": "suspicious"
+        },
+        "CTX AI": {
+          "method": "blacklist",
+          "engine_name": "CTX AI",
+          "category": "malicious",
+          "result": "malware"
+        },
+        "Sophos": {
+          "method": "blacklist",
+          "engine_name": "Sophos",
+          "category": "malicious",
+          "result": "malware"
+        },
+        "VIPRE": {
+          "method": "blacklist",
+          "engine_name": "VIPRE",
+          "category": "malicious",
+          "result": "malware"
+        }
+      }
+    }
+  }
+}

@@ -2,7 +2,7 @@
   "id": "threatintel-ai-engine",
   "name": "ThreatIntel AI Engine",
   "description": "Evidence-first threat intelligence investigation engine. Supports CVE investigations using NVD, CISA KEV, Red Hat Security Data API, and OSV, with source correlation and comparison over time. Provides vendor-specific product impact assessments and retrieval of previously persisted investigation context.",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "configSchema": {
     "type": "object",
     "properties": {
@@ -74,6 +74,17 @@
         "type": "string",
         "description": "Optional GreyNoise API key; the community API works without one at a lower limit."
       },
+      "virustotalApiKey": {
+        "type": "string",
+        "description": "VirusTotal API key for indicator lookups (reports only; nothing is submitted). Without it, VirusTotal is reported as not checked."
+      },
+      "virustotalPerMinute": {
+        "type": "integer",
+        "description": "Most VirusTotal requests per minute. The public API allows 4.",
+        "default": 4,
+        "minimum": 1,
+        "maximum": 1000
+      },
       "otxApiKey": {
         "type": "string",
         "description": "Optional AlienVault OTX API key; OTX works without one at a lower limit."
@@ -83,7 +94,7 @@
         "items": {
           "type": "string"
         },
-        "description": "Enabled lookup services: internetdb, greynoise, abuseipdb, otx. All by default."
+        "description": "Enabled lookup services: internetdb, greynoise, abuseipdb, otx, virustotal. All by default."
       },
       "lookupCacheHours": {
         "type": "integer",
@@ -117,9 +128,13 @@
           "otx": {
             "type": "integer",
             "minimum": 0
+          },
+          "virustotal": {
+            "type": "integer",
+            "minimum": 0
           }
         },
-        "description": "Most calls per service per UTC day. Defaults: internetdb 2000, greynoise 50, abuseipdb 900, otx 1000."
+        "description": "Most calls per service per UTC day. Defaults: internetdb 2000, greynoise 50, abuseipdb 900, otx 1000, virustotal 450."
       },
       "feedNotifyTarget": {
         "type": "string",

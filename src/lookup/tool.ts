@@ -17,6 +17,8 @@ export type LookupPluginConfig = {
     abuseipdbApiKey?: string;
     greynoiseApiKey?: string;
     otxApiKey?: string;
+    virustotalApiKey?: string;
+    virustotalPerMinute?: number;
     lookupSources?: string[];
     lookupCacheHours?: number;
     lookupPerUserPerHour?: number;
@@ -28,6 +30,8 @@ export const DEFAULT_DAILY_BUDGETS: Record<LookupSourceId, number> = {
     greynoise: 50,
     abuseipdb: 900,
     otx: 1000,
+    // The public API allows 500 a day; the rest is headroom for manual use.
+    virustotal: 450,
 };
 
 export function lookupSettings(config: LookupPluginConfig): LookupSettings {
@@ -44,7 +48,9 @@ export function lookupSettings(config: LookupPluginConfig): LookupSettings {
                 abuseipdb: config.abuseipdbApiKey?.trim() || undefined,
                 greynoise: config.greynoiseApiKey?.trim() || undefined,
                 otx: config.otxApiKey?.trim() || undefined,
+                virustotal: config.virustotalApiKey?.trim() || undefined,
             },
+            virustotalPerMinute: config.virustotalPerMinute ?? 4,
         },
     };
 }
@@ -53,8 +59,10 @@ export const LOOKUP_TOOL_DEFINITION = {
     name: "threatintel_lookup_indicator",
     label: "ThreatIntel Indicator Lookup",
     description: [
-        "Look up the reputation and exposure of one public IPv4 address, domain, or file hash (MD5, SHA-1, SHA-256) in AbuseIPDB, GreyNoise, Shodan InternetDB, and AlienVault OTX.",
-        "Defanged input such as 1.2.3[.]4 or hxxp://evil[.]com is accepted; a URL is looked up by its host only.",
+        "Look up the reputation and exposure of one public IPv4 address, domain, URL, or file hash (MD5, SHA-1, SHA-256) in AbuseIPDB, GreyNoise, Shodan InternetDB, AlienVault OTX, and VirusTotal.",
+        "Defanged input such as 1.2.3[.]4 or hxxp://evil[.]com/x is accepted. A URL is looked up as a full URL (VirusTotal and OTX); look up its host separately for the domain or address.",
+        "Existing reports are read only: nothing is ever submitted for scanning.",
+        "Give VirusTotal results as counts, such as '12 of 93 engines flag it malicious'; a few detections among many engines are often false positives.",
         "Start from summary.statement. Report each service's result as it states it, with checkedAt.",
         "No record or no reports is never proof an indicator is safe; say 'no reports', not 'safe' or 'clean'.",
         "A service under 'Not checked' was not queried; never describe its result.",
@@ -62,7 +70,7 @@ export const LOOKUP_TOOL_DEFINITION = {
         "Private, internal, and reserved addresses are refused and never sent anywhere; say so if refused.",
     ].join(" "),
     parameters: Type.Object({
-        indicator: Type.String({ description: "One IPv4 address, domain, or file hash. Defanged forms are fine." }),
+        indicator: Type.String({ description: "One IPv4 address, domain, URL, or file hash. Defanged forms are fine." }),
     }),
 } as const;
 

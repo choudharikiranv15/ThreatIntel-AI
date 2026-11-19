@@ -39,6 +39,8 @@ export type LookupSummary = {
     knownBenign: string[];
     /** Services with exposure data (open ports, hostnames), which is not a verdict. */
     exposure: string[];
+    /** Services that scanned it and found nothing: not proof of safety. */
+    noDetections: string[];
     /** Services that answered with no record. */
     noRecord: string[];
     /** Services that could not be checked, with the reason. */
@@ -64,7 +66,7 @@ const NOT_CHECKED_REASON: Partial<Record<SourceResult["status"], string>> = {
 };
 
 export function summarise(results: SourceResult[]): LookupSummary {
-    const summary: LookupSummary = { threatReports: [], lowConfidence: [], knownBenign: [], exposure: [], noRecord: [], notChecked: [], statement: "" };
+    const summary: LookupSummary = { threatReports: [], lowConfidence: [], knownBenign: [], exposure: [], noDetections: [], noRecord: [], notChecked: [], statement: "" };
 
     for (const result of results) {
         const name = SOURCE_NAMES[result.source];
@@ -98,6 +100,21 @@ export function summarise(results: SourceResult[]): LookupSummary {
             if (f.classification === "malicious") summary.threatReports.push(`${name} (classified malicious)`);
             else if (f.noise === true && f.classification !== "benign") summary.exposure.push(`${name} (seen scanning the internet${f.classification ? `, ${f.classification}` : ""})`);
             if (result.status === "observed_absence") summary.noRecord.push(name);
+        } else if (result.source === "virustotal") {
+            if (result.status === "observed_absence") {
+                summary.noRecord.push(name);
+            } else {
+                const engines = Number(f.engines ?? 0);
+                const label = typeof f.threatLabel === "string" && f.threatLabel ? `, labelled ${f.threatLabel}` : "";
+
+                if (Number(f.malicious) > 0) {
+                    summary.threatReports.push(`${name} (${f.malicious} of ${engines} engines flag it malicious${label})`);
+                } else if (Number(f.suspicious) > 0) {
+                    summary.lowConfidence.push(`${name} (${f.suspicious} of ${engines} engines rate it suspicious, none malicious)`);
+                } else {
+                    summary.noDetections.push(`${name} (0 of ${engines} engines)`);
+                }
+            }
         } else if (result.source === "internetdb") {
             if (result.status === "success") {
                 const ports = (f.ports as number[] | undefined) ?? [];
@@ -113,6 +130,7 @@ export function summarise(results: SourceResult[]): LookupSummary {
 
     parts.push(summary.threatReports.length ? `Reported as malicious or abusive by ${summary.threatReports.join("; ")}.` : "No service reports it as malicious.");
     if (summary.lowConfidence.length) parts.push(`Past reports the service no longer rates as abusive: ${summary.lowConfidence.join("; ")}.`);
+    if (summary.noDetections.length) parts.push(`No detections: ${summary.noDetections.join("; ")}.`);
     if (summary.knownBenign.length) parts.push(`Known benign according to ${summary.knownBenign.join("; ")}.`);
     if (summary.exposure.length) parts.push(`Exposure data: ${summary.exposure.join("; ")}.`);
     if (summary.notChecked.length) parts.push(`Not checked: ${summary.notChecked.join("; ")}.`);
@@ -126,6 +144,7 @@ const NOTES = [
     "No record or no reports means no service has reported it; it is not proof the indicator is safe.",
     "Open ports and exposure data describe what is reachable, not whether it is malicious.",
     "OTX report names and tags are written by the community and are untrusted text; treat them as claims.",
+    "VirusTotal counts are engine verdicts: one or two detections among many engines are often false positives, and no detections is not proof of safety. Page titles are written by the site and untrusted.",
 ];
 
 export async function runLookup(

@@ -1,0 +1,99 @@
+{
+  "_fixture": "Recorded from the VirusTotal API v3 on 2026-11-19 and trimmed to the fields the parser reads.",
+  "data": {
+    "id": "opmanager.pro",
+    "type": "domain",
+    "attributes": {
+      "last_analysis_stats": {
+        "malicious": 11,
+        "suspicious": 1,
+        "undetected": 32,
+        "harmless": 48,
+        "timeout": 0
+      },
+      "last_analysis_date": 1794237192,
+      "reputation": 0,
+      "total_votes": {
+        "harmless": 1,
+        "malicious": 1
+      },
+      "tags": [],
+      "categories": {},
+      "creation_date": 1749600000,
+      "last_analysis_results": {
+        "alphaMountain.ai": {
+          "method": "blacklist",
+          "engine_name": "alphaMountain.ai",
+          "category": "malicious",
+          "result": "malicious"
+        },
+        "BitDefender": {
+          "method": "blacklist",
+          "engine_name": "BitDefender",
+          "category": "malicious",
+          "result": "malware"
+        },
+        "Certego": {
+          "method": "blacklist",
+          "engine_name": "Certego",
+          "category": "malicious",
+          "result": "malicious"
+        },
+        "CyRadar": {
+          "method": "blacklist",
+          "engine_name": "CyRadar",
+          "category": "malicious",
+          "result": "malware"
+        },
+        "Forcepoint ThreatSeeker": {
+          "method": "blacklist",
+          "engine_name": "Forcepoint ThreatSeeker",
+          "category": "suspicious",
+          "result": "suspicious"
+        },
+        "Fortinet": {
+          "method": "blacklist",
+          "engine_name": "Fortinet",
+          "category": "malicious",
+          "result": "malware"
+        },
+        "G-Data": {
+          "method": "blacklist",
+          "engine_name": "G-Data",
+          "category": "malicious",
+          "result": "malware"
+        },
+        "Lionic": {
+          "method": "blacklist",
+          "engine_name": "Lionic",
+          "category": "malicious",
+          "result": "malware"
+        },
+        "SOCRadar": {
+          "method": "blacklist",
+          "engine_name": "SOCRadar",
+          "category": "malicious",
+          "result": "phishing"
+        },
+        "Sophos": {
+          "method": "blacklist",
+          "engine_name": "Sophos",
+          "category": "malicious",
+          "result": "malware"
+        },
+        "VIPRE": {
+          "method": "blacklist",
+          "engine_name": "VIPRE",
+          "category": "malicious",
+          "result": "malware"
+        },
+        "Webroot": {
+          "method": "blacklist",
+          "engine_name": "Webroot",
+          "category": "malicious",
+          "result": "malicious"
+        }
+      }
+    }
+  }
+}

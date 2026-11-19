@@ -14,6 +14,10 @@ import {
     parseGreyNoise,
     parseInternetDb,
     parseOtx,
+    parseVirusTotal,
+    reserveVirusTotalCall,
+    resetVirusTotalCallsForTesting,
+    virusTotalUrlId,
     type LookupSourceId,
     type SourceResult,
 } from "./lookup/sources.js";
@@ -41,14 +45,27 @@ function testIndicators(): void {
     ok("194.127.178.21", "194.127.178.21", "ipv4");
     ok("194.127.178[.]21", "194.127.178.21", "ipv4");
     ok("  `194[.]127[.]178[.]21`  ", "194.127.178.21", "ipv4");
-    ok("hxxps://cdn.bad-host[.]example/payload.bin".replace("example", "com"), "cdn.bad-host.com", "domain");
+    ok("hxxps://cdn.bad-host[.]example/payload.bin".replace("example", "com"), "https://cdn.bad-host.com/payload.bin", "url");
     ok("OPManager[.]PRO", "opmanager.pro", "domain");
     ok("evil[dot]com", "evil.com", "domain");
     ok("275A021BBFB6489E54D471899F7DB9D1663FC695EC2FE2A2C4538AABF651FD0F", "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f", "sha256");
     ok("3d5ee8429ef00824c0351cba507dfeb92b54f83b", "3d5ee8429ef00824c0351cba507dfeb92b54f83b", "sha1");
     ok("44d88612fea8a8f36de82e1278abb02f", "44d88612fea8a8f36de82e1278abb02f", "md5");
 
-    assert(!("error" in parseIndicator("http://example-c2.com/path?secret=1")) && (parseIndicator("http://example-c2.com/path?secret=1") as Indicator).note, "a URL is reduced to its host, and says so");
+    /* URLs are looked up whole, with credentials and fragments removed, and only on public hosts. */
+    const url = parseIndicator("hxxp://user:pa55@Example-C2[.]com/path?q=1#frag") as Indicator;
+
+    assert(url.type === "url" && url.value === "http://example-c2.com/path?q=1", `a URL keeps its path and query, loses credentials and fragment: ${JSON.stringify(url)}`);
+    assert(/Credentials in the URL were removed/.test(url.note ?? "") && /look up example-c2\.com/.test(url.note ?? ""), "and says so, pointing to the host lookup");
+
+    for (const internal of ["http://169.254.169.254/latest/meta-data/", "https://10.0.0.5/admin", "http://intranet.corp/x", "http://localhost:8080/"]) {
+        const result = parseIndicator(internal);
+
+        assert("error" in result, `a URL on a non-public host is refused: ${internal}`);
+    }
+
+    assert((parseIndicator("javascript:alert(1)") as { error?: string }).error !== undefined, "a non-web scheme is refused");
+    assert((parseIndicator("file:///etc/passwd") as { error?: string }).error === "unsupported", "file URLs are refused");
 
     /* Never sent anywhere: private, internal, reserved. */
     for (const address of ["10.0.0.5", "172.16.4.1", "192.168.1.10", "127.0.0.1", "169.254.169.254", "100.64.0.1", "0.0.0.0", "224.0.0.1", "255.255.255.255", "198.18.0.1", "192.0.2.10", "203.0.113.7"]) {
@@ -192,23 +209,30 @@ async function testOrchestration(): Promise<void> {
 
     assert("error" in refused && calls.length === 0 && privateStore.recorded.length === 0, "the metadata address is never sent or recorded");
 
-    /* An IP goes to all four; a hash only to OTX. */
+    /* An IP goes to all five; a hash to OTX and VirusTotal; a URL to VirusTotal and OTX. */
     const ipStore = fakeStore();
     const ip = (await runLookup("194.127.178[.]21", "u1", SETTINGS, { fetchSource, store: ipStore.store })) as LookupPayload;
 
-    assert(calls.sort().join(",") === "abuseipdb,greynoise,internetdb,otx" && ip.indicator === "194.127.178.21", `an IP is checked by all four services: ${calls}`);
-    assert(ipStore.recorded[0].results.length === 4, "every source result is recorded");
+    assert(calls.sort().join(",") === "abuseipdb,greynoise,internetdb,otx,virustotal" && ip.indicator === "194.127.178.21", `an IP is checked by all five services: ${calls}`);
+    assert(ipStore.recorded[0].results.length === 5, "every source result is recorded");
 
     calls = [];
     await runLookup("44d88612fea8a8f36de82e1278abb02f", "u1", SETTINGS, { fetchSource, store: fakeStore().store });
-    assert(calls.join(",") === "otx", `a hash is checked only by OTX: ${calls}`);
+    assert(calls.sort().join(",") === "otx,virustotal", `a hash is checked by OTX and VirusTotal: ${calls}`);
+
+    calls = [];
+    const urlLookup = (await runLookup("hxxps://evil[.]com/login", "u1", SETTINGS, { fetchSource, store: fakeStore().store })) as LookupPayload;
+    assert(calls.sort().join(",") === "otx,virustotal" && urlLookup.type === "url" && /look up evil\.com/.test(urlLookup.note ?? ""), `a URL is checked by the URL services: ${calls}`);
 
     /* Cache, budget, and per-person limit. */
     calls = [];
     const cached = { ...result("otx", parseOtx(fixture("otx-domain.json"))), cached: true };
     const fromCache = (await runLookup("opmanager.pro", "u1", SETTINGS, { fetchSource, store: fakeStore({ cached }).store })) as LookupPayload;
 
-    assert(calls.length === 0 && fromCache.sources[0].cached === true && fromCache.notes.some((note) => /reused/.test(note)), "a recent answer is reused and labelled");
+    assert(
+        calls.join(",") === "virustotal" && fromCache.sources.find((s) => s.source === "otx")?.cached === true && fromCache.notes.some((note) => /reused/.test(note)),
+        `a recent answer is reused and labelled; only the uncached service is called: ${calls}`,
+    );
 
     calls = [];
     const spent = (await runLookup("opmanager.pro", "u1", SETTINGS, { fetchSource, store: fakeStore({ calls: 99_999 }).store })) as LookupPayload;
@@ -270,6 +294,51 @@ async function testNetwork(): Promise<void> {
         assert((await lookupSource("abuseipdb", ip, { ...options, keys: {} })).status === "not_configured" && requests.length === 0, "without a key, AbuseIPDB is not called");
 
         assert((await lookupSource("internetdb", { value: "a.com", type: "domain" }, options)).status === "not_applicable", "a service never receives a type it does not cover");
+
+        /* VirusTotal: key in the x-apikey header, report reads only, 404 is no record, per-minute limit. */
+        const vt = { ...options, keys: { virustotal: "VT-SECRET-456" }, virustotalPerMinute: 4 };
+        const methods: string[] = [];
+
+        globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+            requests.push({ url: String(input), headers: Object.fromEntries(new Headers(init?.headers).entries()) });
+            methods.push(init?.method ?? "GET");
+            return reply();
+        }) as typeof fetch;
+
+        resetVirusTotalCallsForTesting();
+        requests.length = 0;
+        reply = () => Response.json(fixture("virustotal-url.json"));
+
+        const page = "http://www.eicar.org/download/eicar.com.txt";
+        const vtUrl = await lookupSource("virustotal", { value: page, type: "url" }, vt);
+
+        assert(vtUrl.status === "success" && requests[0].url === `https://www.virustotal.com/api/v3/urls/${virusTotalUrlId(page)}`, `a URL is read by its VirusTotal id: ${requests[0]?.url}`);
+        assert(requests[0].headers["x-apikey"] === "VT-SECRET-456" && !requests[0].url.includes("VT-SECRET") && !JSON.stringify(vtUrl).includes("VT-SECRET"), "the VirusTotal key stays in the header and out of results");
+        assert(virusTotalUrlId(page) === "aHR0cDovL3d3dy5laWNhci5vcmcvZG93bmxvYWQvZWljYXIuY29tLnR4dA", "the URL id is unpadded base64url, as VirusTotal defines it");
+        assert(/^https:\/\/www\.virustotal\.com\/gui\/url\/[0-9a-f]{64}$/.test(vtUrl.reference ?? ""), "the reference links to the URL's report page");
+
+        reply = () => new Response(JSON.stringify(fixture("virustotal-none.json")), { status: 404 });
+        assert((await lookupSource("virustotal", { value: "0".repeat(63) + "1", type: "sha256" }, vt)).status === "observed_absence", "an unknown hash is no record, not an error");
+
+        reply = () => Response.json(fixture("virustotal-ip.json"));
+        await lookupSource("virustotal", { value: "8.8.8.8", type: "ipv4" }, vt);
+        await lookupSource("virustotal", { value: "opmanager.pro", type: "domain" }, vt);
+
+        const fifth = requests.length;
+        const overLimit = await lookupSource("virustotal", { value: "8.8.4.4", type: "ipv4" }, vt);
+
+        assert(overLimit.status === "rate_limited" && requests.length === fifth, "a fifth request within a minute is not sent");
+        assert(methods.every((method) => method === "GET") && requests.every((r) => !/\/analyse|\/scan|\/files$|\/urls$/.test(r.url)), "nothing is ever submitted for scanning");
+
+        requests.length = 0;
+        resetVirusTotalCallsForTesting();
+        assert((await lookupSource("virustotal", ip, { ...options, keys: {} })).status === "not_configured" && requests.length === 0, "without a key, VirusTotal is not called");
+
+        const now = 1_000_000;
+        resetVirusTotalCallsForTesting();
+        for (let i = 0; i < 4; i += 1) reserveVirusTotalCall(4, now + i);
+        assert(!reserveVirusTotalCall(4, now + 59_000) && reserveVirusTotalCall(4, now + 60_001), "the per-minute window slides");
+        resetVirusTotalCallsForTesting();
     } finally {
         globalThis.fetch = realFetch;
     }
@@ -312,11 +381,53 @@ function testGate(): void {
     assert(checkIndicatorAnswer("OTX has 18 pulses for it.", [reported]).length === 0, "a correct OTX count passes");
     assert(checkIndicatorAnswer("Unrelated text about CVE-2024-3094.", []).length === 0, "no lookups, no findings");
 
+    const vtDomain = payload([result("virustotal", parseVirusTotal(200, fixture("virustotal-domain.json"), "domain"))], "opmanager.pro");
+
+    assert(checkIndicatorAnswer("VirusTotal: 20 of 92 engines flag opmanager.pro as malicious.", [vtDomain]).some((f) => /20 VirusTotal detections/.test(f)), "a misquoted VirusTotal count is flagged");
+    assert(checkIndicatorAnswer("VirusTotal: 11 of 92 engines flag opmanager.pro as malicious.", [vtDomain]).length === 0, "a correct VirusTotal count passes");
+    assert(checkIndicatorAnswer("VirusTotal shows 1 engine rating opmanager.pro suspicious.", [vtDomain]).length === 0, "the suspicious count is checked against suspicious");
+
+    const vtMissing = payload([result("virustotal", { status: "not_configured", facts: null })], "opmanager.pro");
+
+    assert(checkIndicatorAnswer("VirusTotal flagged opmanager.pro with 11 detections.", [vtMissing]).some((f) => /was not checked/.test(f)), "a VirusTotal result without a VirusTotal check is flagged");
+
     console.log("✓ The answer gate catches 'safe' from absence, unchecked services, and misquoted figures");
+}
+
+function testVirusTotal(): void {
+    const ip = parseVirusTotal(200, fixture("virustotal-ip.json"), "ipv4");
+    const f = ip.facts as Record<string, unknown>;
+
+    assert(ip.status === "success" && f.malicious === 1 && f.engines === 92 && f.asOwner === "Google LLC" && f.asn === 15169 && (f.flaggedMalicious as unknown[]).length === 1, `IP reports are read: ${JSON.stringify(f).slice(0, 200)}`);
+
+    const file = parseVirusTotal(200, fixture("virustotal-file.json"), "sha256").facts as Record<string, unknown>;
+
+    assert(file.malicious === 65 && file.engines === 67 && file.threatLabel === "virus.eicar/test" && (file.flaggedMalicious as unknown[]).length === 8, "file reports give the label, and list at most 8 engines; unsupported types are not counted");
+
+    const url = parseVirusTotal(200, fixture("virustotal-url.json"), "url").facts as Record<string, unknown>;
+
+    assert(url.malicious === 12 && url.suspicious === 1 && typeof url.finalUrl === "string", "URL reports are read");
+    assert(parseVirusTotal(404, fixture("virustotal-none.json"), "sha256").status === "observed_absence", "404 is no record");
+
+    /* The summary: detections are counts, a clean scan is not 'safe', suspicious alone is low confidence. */
+    const flagged = summarise([result("virustotal", parseVirusTotal(200, fixture("virustotal-file.json"), "sha256"))]);
+
+    assert(/VirusTotal \(65 of 67 engines flag it malicious, labelled virus\.eicar\/test\)/.test(flagged.statement), `detections are stated as counts with the label: ${flagged.statement}`);
+
+    const none = summarise([result("virustotal", parseVirusTotal(200, fixture("virustotal-badip.json"), "ipv4"))]);
+
+    assert(/No detections: VirusTotal \(0 of 92 engines\)/.test(none.statement) && !/safe|clean/i.test(none.statement), `no detections is stated as such: ${none.statement}`);
+
+    const suspicious = summarise([result("virustotal", parseVirusTotal(200, { data: { attributes: { last_analysis_stats: { malicious: 0, suspicious: 2, harmless: 60, undetected: 30 } } } }, "domain"))]);
+
+    assert(suspicious.threatReports.length === 0 && /2 of 92 engines rate it suspicious/.test(suspicious.statement), "suspicious without malicious is not a threat report");
+
+    console.log("✓ VirusTotal reports are read as engine counts, and stated without overclaiming");
 }
 
 async function main(): Promise<void> {
     testIndicators();
+    testVirusTotal();
     testParsers();
     testSummary();
     await testOrchestration();

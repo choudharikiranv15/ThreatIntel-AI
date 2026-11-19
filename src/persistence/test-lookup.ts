@@ -67,7 +67,7 @@ async function main(): Promise<void> {
 
         const first = await runLookup(ip.value, who, settings, { fetchSource });
 
-        assert(!("error" in first) && first.sources.length === 4, "the lookup runs and is recorded");
+        assert(!("error" in first) && first.sources.length === 5, "the lookup runs and is recorded");
 
         const otxCallsBefore = calls;
         const second = await runLookup(ip.value, who, settings, { fetchSource });
@@ -80,7 +80,7 @@ async function main(): Promise<void> {
         assert(!("error" in reused) && reused.sources.every((source) => source.cached) && calls === otxCallsBefore, "another person's identical lookup is served from the cache");
 
         /* Budget exhaustion through the real ledger. */
-        const tight = { ...settings, cacheHours: 0, dailyBudgets: { internetdb: 0, greynoise: 0, abuseipdb: 0, otx: 0 } };
+        const tight = { ...settings, cacheHours: 0, dailyBudgets: { internetdb: 0, greynoise: 0, abuseipdb: 0, otx: 0, virustotal: 0 } };
         const spent = await runLookup("opmanager.pro", `${who}-c`, tight, { fetchSource });
 
         assert(!("error" in spent) && spent.sources.every((source) => source.status === "budget_exhausted"), "an exhausted budget is enforced from the database");

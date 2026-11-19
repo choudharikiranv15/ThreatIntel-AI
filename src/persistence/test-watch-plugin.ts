@@ -201,8 +201,11 @@ async function main(): Promise<void> {
     const realLookup = JSON.parse((await lookupTool.execute("call", { indicator: "44d88612fea8a8f36de82e1278abb02f" })).content[0].text);
 
     assert(
-        realLookup.type === "md5" && Array.isArray(realLookup.sources) && realLookup.sources.every((source: { source: string }) => source.source === "otx"),
-        `a hash lookup reaches OTX only, through the real entry and database: ${JSON.stringify(realLookup).slice(0, 200)}`,
+        realLookup.type === "md5" &&
+        Array.isArray(realLookup.sources) &&
+        realLookup.sources.map((source: { source: string }) => source.source).sort().join(",") === "otx,virustotal" &&
+        realLookup.sources.some((source: { source: string; status: string }) => source.source === "virustotal" && source.status === "not_configured"),
+        `a hash lookup reaches the hash services only, and VirusTotal without a key is not called: ${JSON.stringify(realLookup).slice(0, 200)}`,
     );
 
     const added = await call(owner, "threatintel_watch_add", { target: CVE.toLowerCase() });

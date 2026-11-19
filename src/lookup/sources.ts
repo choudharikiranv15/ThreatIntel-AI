@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { fetchWithRetry, INTERACTIVE_RETRY, type RetryPolicy } from "../sources/request-signal.js";
 import type { Indicator, IndicatorType } from "./indicator.js";
 
@@ -7,15 +9,16 @@ import type { Indicator, IndicatorType } from "./indicator.js";
  * apart from "not checked". API keys travel only in request headers.
  */
 
-export type LookupSourceId = "internetdb" | "greynoise" | "abuseipdb" | "otx";
+export type LookupSourceId = "internetdb" | "greynoise" | "abuseipdb" | "otx" | "virustotal";
 
-export const ALL_LOOKUP_SOURCES: LookupSourceId[] = ["internetdb", "greynoise", "abuseipdb", "otx"];
+export const ALL_LOOKUP_SOURCES: LookupSourceId[] = ["internetdb", "greynoise", "abuseipdb", "otx", "virustotal"];
 
 export const SOURCE_NAMES: Record<LookupSourceId, string> = {
     internetdb: "Shodan InternetDB",
     greynoise: "GreyNoise",
     abuseipdb: "AbuseIPDB",
     otx: "AlienVault OTX",
+    virustotal: "VirusTotal",
 };
 
 /**
@@ -49,12 +52,19 @@ export const COVERS: Record<LookupSourceId, IndicatorType[]> = {
     internetdb: ["ipv4"],
     greynoise: ["ipv4"],
     abuseipdb: ["ipv4"],
-    otx: ["ipv4", "domain", "md5", "sha1", "sha256"],
+    otx: ["ipv4", "domain", "url", "md5", "sha1", "sha256"],
+    virustotal: ["ipv4", "domain", "url", "md5", "sha1", "sha256"],
 };
 
-export type LookupKeys = { abuseipdb?: string; greynoise?: string; otx?: string };
+export type LookupKeys = { abuseipdb?: string; greynoise?: string; otx?: string; virustotal?: string };
 
-export type LookupOptions = { timeoutMs: number; retry?: RetryPolicy; keys: LookupKeys };
+export type LookupOptions = {
+    timeoutMs: number;
+    retry?: RetryPolicy;
+    keys: LookupKeys;
+    /** VirusTotal's public API allows 4 requests a minute. */
+    virustotalPerMinute?: number;
+};
 
 const MAX_LIST = 10;
 
@@ -159,17 +169,132 @@ export function parseOtx(body: unknown): Pick<SourceResult, "status" | "facts"> 
     return { status: count > 0 ? "success" : "observed_absence", facts };
 }
 
+type EngineResult = { category?: unknown; result?: unknown; engine_name?: unknown };
+
+/** VirusTotal: engine verdict counts and the engines that flagged it. Never the raw report. */
+export function parseVirusTotal(status: number, body: unknown, type: IndicatorType): Pick<SourceResult, "status" | "facts"> {
+    if (status === 404) {
+        return { status: "observed_absence", facts: null };
+    }
+
+    const a = (((body ?? {}) as { data?: { attributes?: Record<string, unknown> } }).data?.attributes ?? {}) as Record<string, unknown>;
+    const stats = (a.last_analysis_stats ?? {}) as Record<string, unknown>;
+    const count = (key: string) => (typeof stats[key] === "number" ? (stats[key] as number) : 0);
+    const malicious = count("malicious");
+    const suspicious = count("suspicious");
+    const results = Object.entries((a.last_analysis_results ?? {}) as Record<string, EngineResult>);
+    const flagged = (category: string) =>
+        results
+            .filter(([, r]) => r?.category === category)
+            .slice(0, 8)
+            .map(([engine, r]) => ({ engine: engine.slice(0, 40), label: str(r.result, 60) }));
+    const time = (value: unknown) => (typeof value === "number" && value > 0 ? new Date(value * 1000).toISOString() : null);
+    const votes = (a.total_votes ?? {}) as Record<string, unknown>;
+    const categories = a.categories && typeof a.categories === "object" ? [...new Set(Object.values(a.categories as Record<string, unknown>).map((c) => str(c, 40)).filter(Boolean))].slice(0, 5) : [];
+    const threat = (a.popular_threat_classification ?? {}) as Record<string, unknown>;
+
+    const facts: Record<string, unknown> = {
+        malicious,
+        suspicious,
+        harmless: count("harmless"),
+        undetected: count("undetected"),
+        // Engines that gave a verdict; unsupported types and timeouts are not counted.
+        engines: malicious + suspicious + count("harmless") + count("undetected"),
+        lastAnalysisAt: time(a.last_analysis_date),
+        flaggedMalicious: flagged("malicious"),
+        flaggedSuspicious: flagged("suspicious"),
+        reputation: typeof a.reputation === "number" ? a.reputation : null,
+        votes: { harmless: Number(votes.harmless ?? 0), malicious: Number(votes.malicious ?? 0) },
+        categories,
+        tags: list(a.tags, 8),
+    };
+
+    if (type === "ipv4") {
+        Object.assign(facts, { asOwner: str(a.as_owner, 80), asn: typeof a.asn === "number" ? a.asn : null, country: str(a.country, 4), network: str(a.network, 40) });
+    } else if (type === "domain") {
+        Object.assign(facts, { registrar: str(a.registrar, 80), createdAt: time(a.creation_date) });
+    } else if (type === "url") {
+        // Page titles are written by whoever runs the site: untrusted.
+        Object.assign(facts, { finalUrl: str(a.last_final_url, 300), title: str(a.title, 120), threatNames: list(a.threat_names, 5), httpStatus: typeof a.last_http_response_code === "number" ? a.last_http_response_code : null });
+    } else {
+        Object.assign(facts, {
+            threatLabel: str(threat.suggested_threat_label, 80),
+            fileType: str(a.type_description, 60),
+            name: str(a.meaningful_name, 120),
+            size: typeof a.size === "number" ? a.size : null,
+            sha256: str(a.sha256, 64),
+            firstSubmittedAt: time(a.first_submission_date),
+        });
+    }
+
+    return { status: "success", facts };
+}
+
 /* --------------------------------- Fetching ------------------------------- */
+
+/** VirusTotal identifies a URL by the unpadded base64url of the URL itself. */
+export function virusTotalUrlId(url: string): string {
+    return Buffer.from(url).toString("base64url");
+}
+
+function virusTotalPath(indicator: Indicator): string {
+    switch (indicator.type) {
+        case "ipv4":
+            return `ip_addresses/${indicator.value}`;
+        case "domain":
+            return `domains/${indicator.value}`;
+        case "url":
+            return `urls/${virusTotalUrlId(indicator.value)}`;
+        default:
+            return `files/${indicator.value}`;
+    }
+}
+
+function virusTotalReference(indicator: Indicator): string {
+    switch (indicator.type) {
+        case "ipv4":
+            return `https://www.virustotal.com/gui/ip-address/${indicator.value}`;
+        case "domain":
+            return `https://www.virustotal.com/gui/domain/${indicator.value}`;
+        case "url":
+            return `https://www.virustotal.com/gui/url/${createHash("sha256").update(indicator.value).digest("hex")}`;
+        default:
+            return `https://www.virustotal.com/gui/file/${indicator.value}`;
+    }
+}
+
+/* Calls made to VirusTotal in the last minute, by this gateway process. */
+const virusTotalCalls: number[] = [];
+
+/** Reserves a VirusTotal call within the per-minute limit; false when the minute is used up. */
+export function reserveVirusTotalCall(perMinute: number, now = Date.now()): boolean {
+    while (virusTotalCalls.length > 0 && now - virusTotalCalls[0] >= 60_000) {
+        virusTotalCalls.shift();
+    }
+
+    if (virusTotalCalls.length >= perMinute) {
+        return false;
+    }
+
+    virusTotalCalls.push(now);
+    return true;
+}
+
+export function resetVirusTotalCallsForTesting(): void {
+    virusTotalCalls.length = 0;
+}
 
 const REFERENCES: Record<LookupSourceId, (i: Indicator) => string> = {
     internetdb: (i) => `https://www.shodan.io/host/${i.value}`,
     greynoise: (i) => `https://viz.greynoise.io/ip/${i.value}`,
     abuseipdb: (i) => `https://www.abuseipdb.com/check/${i.value}`,
-    otx: (i) => `https://otx.alienvault.com/indicator/${otxType(i)}/${i.value}`,
+    otx: (i) => `https://otx.alienvault.com/indicator/${otxType(i)}/${encodeURIComponent(i.value)}`,
+    virustotal: virusTotalReference,
 };
 
 function otxType(indicator: Indicator): string {
     if (indicator.type === "ipv4") return "IPv4";
+    if (indicator.type === "url") return "url";
     if (indicator.type === "domain") return indicator.value.split(".").length > 2 ? "hostname" : "domain";
     return "file";
 }
@@ -206,6 +331,14 @@ export async function lookupSource(
         return { ...base, status: "not_configured", error: "No AbuseIPDB API key is configured on the server." };
     }
 
+    if (source === "virustotal" && !options.keys.virustotal) {
+        return { ...base, status: "not_configured", error: "No VirusTotal API key is configured on the server." };
+    }
+
+    if (source === "virustotal" && !reserveVirusTotalCall(options.virustotalPerMinute ?? 4)) {
+        return { ...base, status: "rate_limited", error: "VirusTotal allows only a few requests a minute; try again shortly." };
+    }
+
     try {
         let response: Response;
 
@@ -234,6 +367,14 @@ export async function lookupSource(
                     options,
                 );
                 break;
+            case "virustotal":
+                // A report lookup only: nothing is ever submitted for scanning.
+                response = await request(
+                    `https://www.virustotal.com/api/v3/${virusTotalPath(indicator)}`,
+                    { "x-apikey": options.keys.virustotal as string },
+                    options,
+                );
+                break;
         }
 
         if (response.status === 429) {
@@ -244,7 +385,7 @@ export async function lookupSource(
             return { ...base, status: "error", error: "The service refused the request; check the API key." };
         }
 
-        const absentOk = (source === "internetdb" || source === "greynoise") && response.status === 404;
+        const absentOk = (source === "internetdb" || source === "greynoise" || source === "virustotal") && response.status === 404;
 
         if (!response.ok && !absentOk) {
             return { ...base, status: "error", error: `The service answered HTTP ${response.status}.` };
@@ -260,7 +401,8 @@ export async function lookupSource(
             source === "internetdb" ? parseInternetDb(response.status, body)
                 : source === "greynoise" ? parseGreyNoise(response.status, body)
                     : source === "abuseipdb" ? parseAbuseIpDb(body)
-                        : parseOtx(body);
+                        : source === "virustotal" ? parseVirusTotal(response.status, body, indicator.type)
+                            : parseOtx(body);
 
         return { ...base, ...parsed };
     } catch (error) {

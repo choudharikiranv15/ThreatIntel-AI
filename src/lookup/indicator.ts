@@ -6,13 +6,13 @@
  * disclose it.
  */
 
-export type IndicatorType = "ipv4" | "domain" | "md5" | "sha1" | "sha256";
+export type IndicatorType = "ipv4" | "domain" | "url" | "md5" | "sha1" | "sha256";
 
 export type Indicator = { value: string; type: IndicatorType; note?: string };
 
 export type IndicatorRejection = { error: "invalid_indicator" | "not_public" | "unsupported"; message: string };
 
-const MAX_INPUT = 300;
+const MAX_INPUT = 2048;
 
 /** Restores a defanged indicator to its plain form. */
 export function refang(input: string): string {
@@ -70,22 +70,64 @@ function domainOf(value: string): string | null {
     return domain;
 }
 
-export function parseIndicator(raw: unknown): Indicator | IndicatorRejection {
-    if (typeof raw !== "string" || raw.trim().length === 0 || raw.length > MAX_INPUT) {
-        return { error: "invalid_indicator", message: "Give one IPv4 address, domain, or file hash (MD5, SHA-1, or SHA-256)." };
+const USAGE = "Give one IPv4 address, domain, URL, or file hash (MD5, SHA-1, or SHA-256).";
+
+/*
+ * A URL is looked up as a whole, so its host must pass the same public check
+ * as a bare host. Credentials and the fragment are removed first: neither
+ * identifies the resource, and credentials must never leave the network.
+ */
+function parseUrl(value: string): Indicator | IndicatorRejection {
+    let url: URL;
+
+    try {
+        url = new URL(value);
+    } catch {
+        return { error: "invalid_indicator", message: "That URL could not be read." };
     }
 
-    let value = refang(raw);
-    let note: string | undefined;
+    if (!/^(https?|ftp):$/.test(url.protocol)) {
+        return { error: "unsupported", message: "Only http, https, and ftp URLs can be looked up." };
+    }
 
-    // A URL is looked up by its host; the path is never sent anywhere.
+    const host = parseIndicator(url.hostname.replace(/^\[|\]$/g, ""));
+
+    if ("error" in host) {
+        return host;
+    }
+
+    if (host.type !== "ipv4" && host.type !== "domain") {
+        return { error: "invalid_indicator", message: "That URL could not be read." };
+    }
+
+    const notes: string[] = [];
+
+    if (url.username || url.password) {
+        url.username = "";
+        url.password = "";
+        notes.push("Credentials in the URL were removed and not sent.");
+    }
+
+    url.hash = "";
+    url.hostname = host.value;
+    notes.push(`Looked up the full URL; look up ${host.value} for the ${host.type === "ipv4" ? "address" : "domain"} itself.`);
+
+    return { value: url.toString(), type: "url", note: notes.join(" ") };
+}
+
+export function parseIndicator(raw: unknown): Indicator | IndicatorRejection {
+    if (typeof raw !== "string" || raw.trim().length === 0 || raw.length > MAX_INPUT) {
+        return { error: "invalid_indicator", message: USAGE };
+    }
+
+    const value = refang(raw);
+
     if (/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) {
-        try {
-            value = new URL(value).hostname.replace(/^\[|\]$/g, "");
-            note = "Looked up the URL's host only.";
-        } catch {
-            return { error: "invalid_indicator", message: "That URL could not be read." };
-        }
+        return parseUrl(value);
+    }
+
+    if (value.length > 253) {
+        return { error: "invalid_indicator", message: USAGE };
     }
 
     if (/^[a-f0-9]{64}$/i.test(value)) return { value: value.toLowerCase(), type: "sha256" };
@@ -94,7 +136,7 @@ export function parseIndicator(raw: unknown): Indicator | IndicatorRejection {
 
     if (IPV4.test(value)) {
         return isPublicIpv4(value)
-            ? { value, type: "ipv4", ...(note ? { note } : {}) }
+            ? { value, type: "ipv4" }
             : { error: "not_public", message: `${value} is a private, reserved, or documentation address. It is not sent to any external service.` };
     }
 
@@ -105,12 +147,12 @@ export function parseIndicator(raw: unknown): Indicator | IndicatorRejection {
     const domain = domainOf(value);
 
     if (!domain) {
-        return { error: "invalid_indicator", message: "Give one IPv4 address, domain, or file hash (MD5, SHA-1, or SHA-256)." };
+        return { error: "invalid_indicator", message: USAGE };
     }
 
     if (INTERNAL_SUFFIX.test(domain)) {
         return { error: "not_public", message: `${domain} is an internal or reserved name. It is not sent to any external service.` };
     }
 
-    return { value: domain, type: "domain", ...(note ? { note } : {}) };
+    return { value: domain, type: "domain" };
 }

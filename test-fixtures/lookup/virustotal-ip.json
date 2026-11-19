@@ -1,0 +1,37 @@
+{
+  "_fixture": "Recorded from the VirusTotal API v3 on 2026-11-19 and trimmed to the fields the parser reads.",
+  "data": {
+    "id": "8.8.8.8",
+    "type": "ip_address",
+    "attributes": {
+      "last_analysis_stats": {
+        "malicious": 1,
+        "suspicious": 0,
+        "undetected": 38,
+        "harmless": 53,
+        "timeout": 0
+      },
+      "last_analysis_date": 1795064095,
+      "reputation": 567,
+      "total_votes": {
+        "harmless": 301,
+        "malicious": 60
+      },
+      "tags": [
+        "suspicious-udp"
+      ],
+      "as_owner": "Google LLC",
+      "asn": 15169,
+      "country": "US",
+      "network": "8.8.8.0/24",
+      "last_analysis_results": {
+        "Synthient": {
+          "method": "blacklist",
+          "engine_name": "Synthient",
+          "category": "malicious",
+          "result": "malicious"
+        }
+      }
+    }
+  }
+}

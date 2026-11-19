@@ -207,13 +207,21 @@ const entry = defineToolPlugin({
       Type.String({ description: "Optional GreyNoise API key; the community API works without one at a lower limit." }),
     ),
 
+    virustotalApiKey: Type.Optional(
+      Type.String({ description: "VirusTotal API key for indicator lookups (reports only; nothing is submitted). Without it, VirusTotal is reported as not checked." }),
+    ),
+
+    virustotalPerMinute: Type.Optional(
+      Type.Integer({ description: "Most VirusTotal requests per minute. The public API allows 4.", default: 4, minimum: 1, maximum: 1000 }),
+    ),
+
     otxApiKey: Type.Optional(
       Type.String({ description: "Optional AlienVault OTX API key; OTX works without one at a lower limit." }),
     ),
 
     lookupSources: Type.Optional(
       Type.Array(Type.String(), {
-        description: "Enabled lookup services: internetdb, greynoise, abuseipdb, otx. All by default.",
+        description: "Enabled lookup services: internetdb, greynoise, abuseipdb, otx, virustotal. All by default.",
       }),
     ),
 
@@ -232,8 +240,9 @@ const entry = defineToolPlugin({
           greynoise: Type.Optional(Type.Integer({ minimum: 0 })),
           abuseipdb: Type.Optional(Type.Integer({ minimum: 0 })),
           otx: Type.Optional(Type.Integer({ minimum: 0 })),
+          virustotal: Type.Optional(Type.Integer({ minimum: 0 })),
         },
-        { description: "Most calls per service per UTC day. Defaults: internetdb 2000, greynoise 50, abuseipdb 900, otx 1000." },
+        { description: "Most calls per service per UTC day. Defaults: internetdb 2000, greynoise 50, abuseipdb 900, otx 1000, virustotal 450." },
       ),
     ),
 
