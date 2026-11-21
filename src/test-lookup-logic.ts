@@ -163,7 +163,7 @@ function testSummary(): void {
     const stale = summarise([zero({ totalReports: 2, numDistinctUsers: 2 })]);
 
     assert(stale.threatReports.length === 0 && stale.lowConfidence.length === 1, "0% confidence reports are low confidence, not a threat report");
-    assert(/No service reports it as malicious/.test(stale.statement) && /Past reports the service no longer rates as abusive: AbuseIPDB \(2 past reports from 2 reporters, abuse confidence 0%\)/.test(stale.statement), `and the statement says so: ${stale.statement}`);
+    assert(/No service reports it as malicious/.test(stale.statement) && /Low-confidence signals: AbuseIPDB \(2 past reports from 2 reporters, abuse confidence 0%\)/.test(stale.statement), `and the statement says so: ${stale.statement}`);
 
     const allowlisted = summarise([zero({ totalReports: 199, numDistinctUsers: 64, isWhitelisted: true })]);
 
@@ -421,6 +421,17 @@ function testVirusTotal(): void {
     const suspicious = summarise([result("virustotal", parseVirusTotal(200, { data: { attributes: { last_analysis_stats: { malicious: 0, suspicious: 2, harmless: 60, undetected: 30 } } } }, "domain"))]);
 
     assert(suspicious.threatReports.length === 0 && /2 of 92 engines rate it suspicious/.test(suspicious.statement), "suspicious without malicious is not a threat report");
+
+    /* One or two detections among ~90 engines are low confidence (seen live: 8.8.8.8, 1 of 92). */
+    const single = summarise([result("virustotal", parseVirusTotal(200, fixture("virustotal-ip.json"), "ipv4"))]);
+
+    assert(single.threatReports.length === 0 && !/Reported as malicious/.test(single.statement), `a single detection is not a threat report: ${single.statement}`);
+    assert(/Low-confidence signals: VirusTotal \(only 1 of 92 engines flag it malicious; so few detections are often false positives\)/.test(single.statement), `and is stated with its exact count: ${single.statement}`);
+
+    const engines = (malicious: number) => summarise([result("virustotal", parseVirusTotal(200, { data: { attributes: { last_analysis_stats: { malicious, suspicious: 0, harmless: 60, undetected: 30 - malicious } } } }, "domain"))]);
+
+    assert(engines(2).threatReports.length === 0 && engines(2).lowConfidence.length === 1, "two detections are still low confidence");
+    assert(engines(3).threatReports.length === 1 && /3 of 90 engines flag it malicious/.test(engines(3).statement), "three or more detections are a threat report");
 
     console.log("✓ VirusTotal reports are read as engine counts, and stated without overclaiming");
 }

@@ -33,7 +33,7 @@ export type LookupDeps = {
 export type LookupSummary = {
     /** Services that report the indicator as malicious or abusive. */
     threatReports: string[];
-    /** Reports a service itself no longer rates as abusive, such as AbuseIPDB reports at 0% confidence. */
+    /** Weak signals: AbuseIPDB reports it rates at 0%, or one or two VirusTotal detections among many engines. */
     lowConfidence: string[];
     /** Services that describe it as a known benign service. */
     knownBenign: string[];
@@ -64,6 +64,9 @@ const NOT_CHECKED_REASON: Partial<Record<SourceResult["status"], string>> = {
     timeout: "timed out",
     error: "unavailable",
 };
+
+/** Fewer VirusTotal detections than this are a low-confidence signal, not a threat report. */
+export const VT_MIN_DETECTIONS = 3;
 
 export function summarise(results: SourceResult[]): LookupSummary {
     const summary: LookupSummary = { threatReports: [], lowConfidence: [], knownBenign: [], exposure: [], noDetections: [], noRecord: [], notChecked: [], statement: "" };
@@ -107,8 +110,11 @@ export function summarise(results: SourceResult[]): LookupSummary {
                 const engines = Number(f.engines ?? 0);
                 const label = typeof f.threatLabel === "string" && f.threatLabel ? `, labelled ${f.threatLabel}` : "";
 
-                if (Number(f.malicious) > 0) {
+                if (Number(f.malicious) >= VT_MIN_DETECTIONS) {
                     summary.threatReports.push(`${name} (${f.malicious} of ${engines} engines flag it malicious${label})`);
+                } else if (Number(f.malicious) > 0) {
+                    // One or two engines out of ~90 are usually false positives (seen live: 8.8.8.8, 1 of 92).
+                    summary.lowConfidence.push(`${name} (only ${f.malicious} of ${engines} engines flag it malicious${label}; so few detections are often false positives)`);
                 } else if (Number(f.suspicious) > 0) {
                     summary.lowConfidence.push(`${name} (${f.suspicious} of ${engines} engines rate it suspicious, none malicious)`);
                 } else {
@@ -129,7 +135,7 @@ export function summarise(results: SourceResult[]): LookupSummary {
     const parts: string[] = [];
 
     parts.push(summary.threatReports.length ? `Reported as malicious or abusive by ${summary.threatReports.join("; ")}.` : "No service reports it as malicious.");
-    if (summary.lowConfidence.length) parts.push(`Past reports the service no longer rates as abusive: ${summary.lowConfidence.join("; ")}.`);
+    if (summary.lowConfidence.length) parts.push(`Low-confidence signals: ${summary.lowConfidence.join("; ")}.`);
     if (summary.noDetections.length) parts.push(`No detections: ${summary.noDetections.join("; ")}.`);
     if (summary.knownBenign.length) parts.push(`Known benign according to ${summary.knownBenign.join("; ")}.`);
     if (summary.exposure.length) parts.push(`Exposure data: ${summary.exposure.join("; ")}.`);
