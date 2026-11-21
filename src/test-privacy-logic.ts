@@ -191,13 +191,40 @@ async function testGateway(): Promise<void> {
 /* --------------------------- Replies and settings --------------------------- */
 
 async function testReplies(): Promise<void> {
-    assert(registerPrivacy({ registerService: () => assert(false, "no service when disabled") }, {}) === undefined && !privacySettings({}).enabled, "the gateway is off unless enabled");
+    assert(
+        registerPrivacy({ registerService: () => assert(false, "no service when disabled"), on: () => assert(false, "no hooks when disabled") } as never, {}) === undefined && !privacySettings({}).enabled,
+        "the gateway is off unless enabled",
+    );
 
     const services: { id: string }[] = [];
+    const privacyHooks = new Map<string, (event: any, context?: any) => any>();
     const redactor = new Redactor();
-    const restore = registerPrivacy({ registerService: (s: unknown) => services.push(s as { id: string }) } as never, { privacyGatewayEnabled: true }, redactor);
+    const restore = registerPrivacy(
+        { registerService: (s: unknown) => services.push(s as { id: string }), on: (name: string, h: any) => privacyHooks.set(name, h) } as never,
+        { privacyGatewayEnabled: true },
+        redactor,
+    );
 
     assert(restore && services[0]?.id === "threatintel-privacy-gateway", "enabling starts the gateway and returns the restore step");
+
+    /* Tool calls: this plugin's tools run on the gateway and get real values back; internet-facing tools do not. */
+    const toolCall = privacyHooks.get("before_tool_call")!;
+    const modelSaw = redactor.redact(ALERT);
+    const triageCall = toolCall({ toolName: "threatintel_triage_alert", params: { text: modelSaw } });
+
+    assert(triageCall?.params.text === redactor.restore(modelSaw) && triageCall.params.text.includes(String.raw`CORP\j.doe`), "a ThreatIntel tool receives the real values");
+    assert(
+        extractIndicators(triageCall.params.text).internal >= 4 && extractIndicators(triageCall.params.text).internal > extractIndicators(modelSaw).internal,
+        `so triage counts internal values again, which placeholders hid: ${extractIndicators(triageCall.params.text).internal} vs ${extractIndicators(modelSaw).internal}`,
+    );
+    assert(triageCall.params.text.includes("185.220.101.47") && modelSaw.includes("185.220.101.47"), "public indicators were never changed on either side");
+    assert(toolCall({ toolName: "web_search", params: { query: `who is ${redactor.placeholder("USER", "j.doe")}` } }) === undefined, "web search keeps the placeholders: a query never carries the data out");
+    assert(toolCall({ toolName: "threatintel_lookup_indicator", params: { indicator: "185.220.101.47" } }) === undefined, "arguments without placeholders are untouched");
+    assert(
+        JSON.stringify(toolCall({ toolName: "threatintel_analyze_email_headers", params: { headers: redactor.redact("From: Jane Doe <jane@example.org>"), nested: [{ x: redactor.redact("user=j.doe") }] } })?.params) ===
+            JSON.stringify({ headers: "From: Jane Doe <jane@example.org>", nested: [{ x: "user=j.doe" }] }),
+        "nested arguments are restored too",
+    );
 
     /* What the model saw had placeholders; the reply posted to chat has the real values. */
     const hooks = new Map<string, (event: any, context: any) => any>();

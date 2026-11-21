@@ -36,8 +36,26 @@ export function privacySettings(config: PrivacyPluginConfig): PrivacySettings {
  * back into an outgoing reply, for the delivery hooks to apply, or undefined
  * when there is nothing to restore.
  */
+/** Puts real values back into every string of a tool's arguments. */
+function restoreParams(value: unknown, redactor: Redactor): unknown {
+    if (typeof value === "string") return redactor.restore(value);
+    if (Array.isArray(value)) return value.map((item) => restoreParams(item, redactor));
+    if (value && typeof value === "object") {
+        return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, restoreParams(v, redactor)]));
+    }
+    return value;
+}
+
+/*
+ * Only this plugin's own tools get real values back: they run on this
+ * machine, and what they return is redacted again before the model sees it.
+ * Tools that reach the internet (web search, web fetch) keep the
+ * placeholders, so a query never carries the data out.
+ */
+const LOCAL_TOOLS = /^threatintel_/;
+
 export function registerPrivacy(
-    api: Pick<OpenClawPluginApi, "registerService">,
+    api: Pick<OpenClawPluginApi, "registerService" | "on">,
     config: PrivacyPluginConfig,
     shared?: Redactor,
 ): ((text: string) => string) | undefined {
@@ -50,6 +68,20 @@ export function registerPrivacy(
     const redactor = shared ?? new Redactor({ terms: settings.terms });
 
     api.registerService(createPrivacyGatewayService(settings, redactor));
+
+    api.on("before_tool_call", (event) => {
+        if (!LOCAL_TOOLS.test(event.toolName)) {
+            return undefined;
+        }
+
+        PLACEHOLDER.lastIndex = 0;
+
+        if (!PLACEHOLDER.test(JSON.stringify(event.params))) {
+            return undefined;
+        }
+
+        return { params: restoreParams(event.params, redactor) as Record<string, unknown> };
+    });
 
     if (!settings.restoreInReplies) {
         return undefined;
