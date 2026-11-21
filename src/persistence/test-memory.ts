@@ -48,7 +48,7 @@ async function main(): Promise<void> {
         assert(history.previousLookups === 2 && history.analysts === 2, `earlier lookups are counted, the current one excluded: ${JSON.stringify(history)}`);
         assert(history.feed.length === 1 && history.feed[0].source === "Unit 42" && history.feed[0].posted, `a defanged article indicator is matched: ${JSON.stringify(history.feed)}`);
         assert(/Looked up 2 times before by 2 analysts/.test(history.statement) && /posted to the threat feed/.test(history.statement), history.statement);
-        assert(!history.statement.includes(RUN), "who looked it up is never shown");
+        assert(!history.statement.includes(`discord:${RUN}`) && !/discord:/.test(history.statement), "who looked it up is never shown");
 
         const none = await teamHistory(fresh, randomUUID());
 
