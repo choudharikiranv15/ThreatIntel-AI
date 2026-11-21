@@ -62,6 +62,11 @@ globalThis.fetch = (async (input: string | URL | Request) => {
         });
     }
 
+    // As the real EPSS API answers for a CVE it has not scored: an empty list, never a 404.
+    if (url.includes("api.first.org/data/v1/epss")) {
+        return Response.json({ status: "OK", total: 0, data: [] });
+    }
+
     return new Response("{}", { status: 404 });
 }) as typeof fetch;
 
