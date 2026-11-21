@@ -39,6 +39,32 @@ function code(value: string): string {
     return `\`${value.replace(/`/g, "'")}\``;
 }
 
+/**
+ * A retro-hunt match: an indicator the team looked up earlier is now listed in
+ * an article. The indicator is shown as the article published it, in a code
+ * span, so Discord never turns it into a link.
+ */
+export function formatRetroHuntAlert(match: {
+    published: string;
+    title: string;
+    source: string;
+    url: string;
+    lookups: number;
+    lastAt: string;
+    days: number;
+}): string {
+    const times = match.lookups === 1 ? "once" : `${match.lookups} times`;
+
+    return [
+        POST_DIVIDER,
+        "**Retro-hunt match**",
+        `${code(match.published)} was looked up by the team ${times} in the last ${match.days} days (last on ${match.lastAt.slice(0, 10)}). It is now listed as an indicator in:`,
+        `**${sanitize(match.title, 180)}** (${sanitize(match.source, 60)})`,
+        /^https?:\/\/[^\s<>]+$/i.test(match.url) ? `<${match.url}>` : NOT_SPECIFIED,
+        "Re-check the alerts and investigations where it appeared.",
+    ].join("\n");
+}
+
 /** The heading: the threat or vulnerability name, never a generic label. */
 export function threatName(item: Pick<EvaluatedItem, "title" | "cves">): string {
     const title = item.title.replace(/\s*\(Severity: \w+\)\s*$/i, "").trim();

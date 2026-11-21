@@ -36,6 +36,7 @@ export const TRIAGE_TOOL_DEFINITION = {
         "Answer with the indicators under lookFirst first, then a short table of every result (indicator, what was reported, the record links), then what was not checked and why (internal values kept on the gateway, skipped console domains, indicators over the cap).",
         "Report each result as its statement says; never call an indicator safe or clean because nothing was reported, and never describe a service under 'Not checked'.",
         "The ranking reflects evidence, not a verdict: leave the conclusion to the analyst.",
+        "seenBefore, when present, says the team looked the indicator up before or a feed article listed it; include it, since it connects this alert to earlier work.",
     ].join(" "),
     parameters: Type.Object({
         text: Type.String({ description: "The alert, log excerpt, or email text, exactly as pasted." }),

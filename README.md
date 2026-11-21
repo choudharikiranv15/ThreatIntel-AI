@@ -29,6 +29,8 @@ It is tuned for a SOC protecting a **Bio/Pharma** organisation: lab systems, man
 
 **Indicator checks.** Paste an IP address, domain, URL, or file hash, defanged or not, and get its reputation from established threat intelligence services: whether it has been reported as malicious, whether it is a known benign service, and what is exposed on it. "No reports" is always reported as no reports, never as "safe".
 
+**Team memory.** Every check also says what the team already knows: whether the indicator was looked up before (how often and when, never by whom) and whether a threat report in the feed listed it. When a new report names an indicator the team checked in the last 90 days, the feed posts a retro-hunt alert, so earlier investigations get a second look.
+
 **Email header analysis.** Paste the headers of a suspicious email to see whether it passed sender authentication, whether the sender, reply address, and display name are consistent, which server it came from, and what the sender's domain publishes. This is useful for phishing and business email compromise triage.
 
 ## How to use it

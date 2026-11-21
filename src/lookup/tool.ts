@@ -63,6 +63,7 @@ export const LOOKUP_TOOL_DEFINITION = {
         "Defanged input such as 1.2.3[.]4 or hxxp://evil[.]com/x is accepted. A URL is looked up as a full URL (VirusTotal and OTX); look up its host separately for the domain or address.",
         "Existing reports are read only: nothing is ever submitted for scanning.",
         "Give VirusTotal results as counts, such as '12 of 93 engines flag it malicious'; a few detections among many engines are often false positives.",
+        "history.statement says whether the team looked the indicator up before and whether a feed article listed it as an indicator; mention it when it says either.",
         "Start from summary.statement. Report each service's result as it states it, with checkedAt.",
         "No record or no reports is never proof an indicator is safe; say 'no reports', not 'safe' or 'clean'.",
         "A service under 'Not checked' was not queried; never describe its result.",

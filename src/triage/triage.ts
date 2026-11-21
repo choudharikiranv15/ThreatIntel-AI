@@ -29,6 +29,8 @@ export type TriageEntry = {
     statement: string;
     /** Records an analyst can open, for the services that have one. */
     records: { source: string; url: string }[];
+    /** What the team and the feed already know about it. */
+    seenBefore?: string;
 };
 
 export type TriagePayload = {
@@ -76,7 +78,7 @@ function merge(first: LookupPayload, second: LookupPayload | null): LookupPayloa
 
     const sources: SourceResult[] = [...first.sources, ...second.sources];
 
-    return { ...first, sources, summary: summarise(sources), notes: first.notes };
+    return { ...first, sources, summary: summarise(sources), notes: first.notes, ...(first.history ? { history: first.history } : {}) };
 }
 
 export async function runTriage(
@@ -131,7 +133,7 @@ export async function runTriage(
     const secondStage = new Map<number, LookupPayload>();
 
     for (const { indicator, i } of vtOrder) {
-        const result = await run(indicator, ["virustotal"]);
+        const result = await runLookup(indicator.value, requestedBy, settings.lookup, deps, { lookupId, checkUserLimit: false, sources: ["virustotal"], skipHistory: true });
 
         if (!("error" in result)) secondStage.set(i, result);
     }
@@ -158,6 +160,8 @@ export async function runTriage(
             records: lookup.sources
                 .filter((s) => s.status === "success" && s.reference)
                 .map((s) => ({ source: SOURCE_NAMES[s.source], url: s.reference as string })),
+            // Only worth the room when there is something to say.
+            ...(lookup.history && (lookup.history.previousLookups > 0 || lookup.history.feed.length > 0) ? { seenBefore: lookup.history.statement.slice(0, 300) } : {}),
         });
     });
 

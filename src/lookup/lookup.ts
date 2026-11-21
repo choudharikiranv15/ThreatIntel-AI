@@ -10,6 +10,7 @@ import {
     type SourceResult,
 } from "./sources.js";
 import * as store from "./store.js";
+import { teamHistory, type TeamHistory } from "../memory/history.js";
 
 /*
  * One indicator lookup: validate, enforce limits, reuse recent answers, query
@@ -28,6 +29,8 @@ export type LookupSettings = {
 export type LookupDeps = {
     fetchSource?: typeof lookupSource;
     store?: Pick<typeof store, "cachedResult" | "callsToday" | "lookupsLastHour" | "recordLookup">;
+    /** What the team and the feed already know; defaults to the database when the real store is used. */
+    history?: (indicator: Indicator, lookupId: string) => Promise<TeamHistory | null>;
 };
 
 export type LookupSummary = {
@@ -53,6 +56,8 @@ export type LookupPayload = {
     type: Indicator["type"];
     note?: string;
     summary: LookupSummary;
+    /** What the team and the feed already know about the indicator. */
+    history?: TeamHistory;
     sources: SourceResult[];
     notes: string[];
 };
@@ -161,6 +166,8 @@ export type LookupRun = {
     checkUserLimit?: boolean;
     /** Only these services, of those enabled. */
     sources?: LookupSourceId[];
+    /** Skips team history, for a second pass over an indicator already covered. */
+    skipHistory?: boolean;
 };
 
 export async function runLookup(
@@ -206,7 +213,12 @@ export async function runLookup(
         return fetchSource(source, indicator, settings.options);
     }));
 
-    await data.recordLookup(run.lookupId ?? randomUUID(), indicator, requestedBy, results);
+    const lookupId = run.lookupId ?? randomUUID();
+    const historyOf = deps.history ?? (deps.store ? null : teamHistory);
+    // Team memory never blocks or fails a lookup.
+    const history = run.skipHistory || !historyOf ? null : await historyOf(indicator, lookupId).catch(() => null);
+
+    await data.recordLookup(lookupId, indicator, requestedBy, results);
 
     const cachedNote = results.some((result) => result.cached)
         ? ["Some answers are reused from an earlier lookup; each source's checkedAt says when it was retrieved."]
@@ -217,6 +229,7 @@ export async function runLookup(
         type: indicator.type,
         ...(indicator.note ? { note: indicator.note } : {}),
         summary: summarise(results),
+        ...(history ? { history } : {}),
         sources: results.map((result) => ({
             ...result,
             ...(result.source === "otx" && result.facts ? { untrusted: "facts.pulses names and tags are community-written" } : {}),

@@ -586,6 +586,21 @@ export async function quietNoticeCount(): Promise<number> {
     return Number(rows[0].n);
 }
 
+/** Saves a retro-hunt alert in the outbox, once per article and indicator. */
+export async function insertRetroAlert(runId: string, itemKey: string, indicator: string, message: string): Promise<boolean> {
+    const { rowCount } = await db.query(
+        `INSERT INTO public.watch_events (
+             target, check_id, kind, fingerprint, field, explanation, deliverable, delivery_status,
+             next_attempt_at, channel, message
+         )
+         VALUES ('feed:retro', $1, 'threat_feed', $2, 'retro_hunt', 'An indicator the team looked up is now listed in an article.', true, 'pending', now(), 'feed', $3)
+         ON CONFLICT (fingerprint) DO NOTHING`,
+        [runId, `retro:${itemKey}:${indicator}`, message],
+    );
+
+    return (rowCount ?? 0) > 0;
+}
+
 /** Saves a quiet notice in the outbox, once per run. */
 export async function insertQuietNotice(runId: string, message: string): Promise<void> {
     await db.query(

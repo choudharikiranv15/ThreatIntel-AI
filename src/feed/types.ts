@@ -38,6 +38,22 @@ export const RESEARCH_SOURCES: FeedSourceId[] = ["dfir-report", "unit42"];
 /** News sites: secondary reporting of other people's findings. Never read for indicators. */
 export const NEWS_SOURCES: FeedSourceId[] = ["cybersecuritynews"];
 
+/** How each source is named to analysts. */
+export const SOURCE_LABELS: Record<FeedSourceId, string> = {
+    "cisa-kev": "CISA KEV",
+    "cisa-advisories": "CISA",
+    "cisa-ics": "CISA ICS",
+    msrc: "Microsoft",
+    paloalto: "Palo Alto Networks",
+    fortinet: "Fortinet",
+    cisco: "Cisco",
+    aws: "AWS",
+    gcp: "Google Cloud",
+    "dfir-report": "The DFIR Report",
+    unit42: "Unit 42",
+    cybersecuritynews: "Cyber Security News",
+};
+
 export type Severity = "critical" | "high" | "medium" | "low" | "unknown";
 
 /**

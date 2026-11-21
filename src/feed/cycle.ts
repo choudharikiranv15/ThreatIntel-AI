@@ -1,10 +1,11 @@
 import { evaluate, type ScopeConfig } from "./classify.js";
 import { CONCEPTS } from "./concepts.js";
-import { formatFeedPost, formatQuietNotice } from "./format.js";
+import { retroHuntMatches, RETRO_DAYS, type RetroMatch } from "../memory/history.js";
+import { formatFeedPost, formatQuietNotice, formatRetroHuntAlert } from "./format.js";
 import { selectForPublication, type Candidate, type SelectionConfig } from "./select.js";
 import type { SourceFetcher } from "./sources.js";
 import * as store from "./store.js";
-import type { EvaluatedItem, FeedSourceId, ProviderOutcome, RawItem } from "./types.js";
+import { SOURCE_LABELS, type EvaluatedItem, type FeedSourceId, type ProviderOutcome, type RawItem } from "./types.js";
 
 /*
  * One collection cycle: collect, evaluate, deduplicate, select, and hand the
@@ -25,6 +26,8 @@ export type FeedCycleDeps = {
     /** Post a short notice, with a security concept, when a cycle has nothing to post. */
     quietNotice?: boolean;
     log?: (message: string) => void;
+    /** Indicators in new articles that the team looked up recently; defaults to the database. */
+    retroHunt?: (items: Array<{ itemKey: string; iocs: Array<{ value: string; type?: string }> }>) => Promise<RetroMatch[]>;
 };
 
 export type FeedCycleResult = {
@@ -145,6 +148,35 @@ export async function runFeedCycleIfDue(deps: FeedCycleDeps): Promise<FeedCycleR
         }
 
         await store.upsertItems([...evaluated.values()], deps.selection.maxAgeDays);
+
+        /* Retro-hunt: indicators in new articles that the team looked up recently. Never blocks the cycle. */
+        const fresh = [...evaluated.values()].filter((item) => !existing.has(item.itemKey) && item.iocs.length > 0);
+
+        if (fresh.length > 0) {
+            try {
+                const matches = await (deps.retroHunt ?? retroHuntMatches)(fresh);
+                let queued = 0;
+
+                for (const match of matches) {
+                    const item = evaluated.get(match.itemKey)!;
+                    const message = formatRetroHuntAlert({
+                        published: match.published,
+                        title: item.title,
+                        source: SOURCE_LABELS[item.source] ?? item.source,
+                        url: item.url,
+                        lookups: match.lookups,
+                        lastAt: match.lastAt,
+                        days: RETRO_DAYS,
+                    });
+
+                    if (await store.insertRetroAlert(runId, match.itemKey, match.indicator, message)) queued += 1;
+                }
+
+                if (queued > 0) deps.log?.(`threat feed: ${queued} retro-hunt match(es) queued`);
+            } catch (error) {
+                deps.log?.(`threat feed: retro-hunt check failed: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
 
         /* Items deferred earlier that the feeds no longer list still compete. */
         for (const queued of await store.loadQueued()) {
