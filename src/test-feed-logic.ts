@@ -241,6 +241,19 @@ function testPriorities(): void {
 
     assert(kevUnscoped.priority === "P3", "confirmed exploitation outside scope is still P3");
 
+    /* Advisories for the SOC's own security tools at medium or unstated severity (seen live: MSRC gives none). */
+    const mediumTool = evaluated({ source: "paloalto", title: "CVE-2026-0330 PAN-OS: Authenticated RCE in Panorama", severity: "medium" }, { ...SCOPE, securityProducts: ["PAN-OS"] });
+
+    assert(mediumTool.priority === "P3" && mediumTool.reasons.some((r) => /medium-severity advisory for an in-scope security product/.test(r)), `a medium advisory for an in-scope security product is P3: ${mediumTool.priority}`);
+
+    const unstated = evaluated({ source: "msrc", title: "CVE-2026-122194 FortiGate Remote Code Execution Vulnerability", severity: "unknown" });
+
+    assert(unstated.priority === "P3" && unstated.reasons.some((r) => /the source states no severity/.test(r)), "an advisory with no stated severity for an in-scope security product is P3, and says so");
+    assert(evaluated({ title: "FortiGate cosmetic issue", severity: "low" }).priority === "ignore", "a low-severity advisory stays filtered");
+    assert(evaluated({ source: "cybersecuritynews", title: "Attackers disable FortiGate logging", severity: "unknown", news: true }).priority === "ignore", "a news article that only mentions the tool does not qualify");
+    assert(evaluated({ source: "unit42", title: "Loader abuses FortiGate", severity: "unknown", research: true }).priority === "ignore", "nor does a research article without indicators");
+    assert(evaluated({ source: "aws", title: "Issue in an AWS SDK", severity: "unknown", platforms: ["AWS"] }).priority === "ignore", "a log-source match with no severity stays filtered");
+
     /* Matching is by whole word or phrase. */
     const partial = evaluated({ title: "AWSome Tool flaw", severity: "high" });
 

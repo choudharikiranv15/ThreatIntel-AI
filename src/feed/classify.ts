@@ -144,6 +144,21 @@ export function evaluate(item: RawItem, scope: ScopeConfig, kevCves: ReadonlySet
         // Published indicators are directly huntable, whatever the scope lists say.
         priority = "P3";
         reasons.push(`research article publishing ${item.iocs.length} indicators`);
+    } else if (
+        securityProducts.length > 0 &&
+        (item.severity === "medium" || item.severity === "unknown") &&
+        !item.research &&
+        !item.news
+    ) {
+        // An advisory for a security tool the SOC runs is worth seeing even at
+        // medium severity, or when the source states none (Microsoft and AWS
+        // feeds give no severity). Articles that only mention the tool do not count.
+        priority = "P3";
+        reasons.push(
+            item.severity === "unknown"
+                ? "advisory for an in-scope security product; the source states no severity"
+                : "medium-severity advisory for an in-scope security product",
+        );
     }
 
     if (priority === "ignore") {
