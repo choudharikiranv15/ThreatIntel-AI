@@ -65,6 +65,7 @@ import { feedSettings, type FeedPluginConfig } from "./feed/runtime.js";
 import { buildFeedTools, FEED_TOOL_DEFINITIONS } from "./feed/tools.js";
 import { buildLookupTool, LOOKUP_TOOL_DEFINITION, lookupSettings, type LookupPluginConfig } from "./lookup/tool.js";
 import { buildHeaderTool, HEADER_TOOL_DEFINITION, headerAnalysisSettings, type HeaderAnalysisPluginConfig } from "./email/tool.js";
+import { buildTriageTool, TRIAGE_TOOL_DEFINITION, triageSettings, type TriagePluginConfig } from "./triage/tool.js";
 
 /* The indicator lookup is built per session, so the hourly limit counts the real requester. */
 function lookupTool() {
@@ -78,6 +79,20 @@ function lookupTool() {
       toolContext: { senderIsOwner?: boolean; requesterSenderId?: string };
     }) =>
       buildLookupTool(toolContext, lookupSettings(config)) as unknown as AnyAgentTool,
+  };
+}
+
+function triageTool() {
+  return {
+    ...TRIAGE_TOOL_DEFINITION,
+    factory: ({
+      config,
+      toolContext,
+    }: {
+      config: TriagePluginConfig;
+      toolContext: { senderIsOwner?: boolean; requesterSenderId?: string };
+    }) =>
+      buildTriageTool(toolContext, triageSettings(config)) as unknown as AnyAgentTool,
   };
 }
 
@@ -220,6 +235,14 @@ const entry = defineToolPlugin({
 
     greynoiseApiKey: Type.Optional(
       Type.String({ description: "Optional GreyNoise API key; the community API works without one at a lower limit." }),
+    ),
+
+    triageMaxIndicators: Type.Optional(
+      Type.Integer({ description: "Most indicators one alert triage checks.", default: 25, minimum: 1, maximum: 50 }),
+    ),
+
+    triageIgnoreDomains: Type.Optional(
+      Type.Array(Type.String(), { description: "Extra domains alert triage treats as the SOC's own infrastructure and never sends, such as the company domain." }),
     ),
 
     mxtoolboxApiKey: Type.Optional(
@@ -749,6 +772,13 @@ const entry = defineToolPlugin({
      * ------------------------------------------------------------
      */
     tool(lookupTool()),
+
+    /*
+     * ------------------------------------------------------------
+     * Alert triage, everyone (one triage counts as one lookup)
+     * ------------------------------------------------------------
+     */
+    tool(triageTool()),
 
     /*
      * ------------------------------------------------------------

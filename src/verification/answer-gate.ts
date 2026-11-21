@@ -9,13 +9,14 @@ import {
     mentionsInvestigated,
 } from "./check-answer.js";
 import { checkEmailAnswer, extractHeaderAnalysis } from "./check-email.js";
-import { checkIndicatorAnswer, extractLookup } from "./check-indicators.js";
+import { checkIndicatorAnswer, extractLookup, extractTriageLookups } from "./check-indicators.js";
 
 const TOOL_NAMES = new Set([
     "threatintel_investigate",
     "threatintel_prior_investigation",
     "threatintel_lookup_indicator",
     "threatintel_analyze_email_headers",
+    "threatintel_triage_alert",
 ]);
 
 const MAX_SESSIONS = 100;
@@ -121,8 +122,9 @@ export function registerAnswerGate(api: OpenClawPluginApi): void {
         const view = extractView(payload);
         const lookup = view ? null : extractLookup(payload);
         const email = view || lookup ? null : extractHeaderAnalysis(payload);
+        const triaged = view || lookup || email ? [] : extractTriageLookups(payload);
 
-        if (!view && !lookup && !email) {
+        if (!view && !lookup && !email && triaged.length === 0) {
             return;
         }
 
@@ -134,8 +136,8 @@ export function registerAnswerGate(api: OpenClawPluginApi): void {
             state.views.set(view.target.toUpperCase(), view);
         }
 
-        if (lookup) {
-            state.lookups.set(lookup.indicator.toLowerCase(), lookup);
+        for (const each of lookup ? [lookup, ...triaged] : triaged) {
+            state.lookups.set(each.indicator.toLowerCase(), each);
         }
 
         if (email) {

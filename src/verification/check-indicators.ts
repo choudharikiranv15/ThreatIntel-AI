@@ -146,6 +146,15 @@ export function checkVirusTotalCounts(segment: string, facts: Record<string, unk
     return quoted === actual ? null : `${label}: the answer gives ${quoted} VirusTotal detections, but the lookup returned ${actual} of ${facts.engines ?? "?"} engines.`;
 }
 
+/** The full lookups behind an alert triage, from the tool result's details. */
+export function extractTriageLookups(payload: unknown): LookupPayload[] {
+    const candidate = payload as { kind?: unknown; lookups?: unknown } | null;
+
+    return candidate?.kind === "triage" && Array.isArray(candidate.lookups)
+        ? candidate.lookups.map(extractLookup).filter((lookup): lookup is LookupPayload => lookup !== null)
+        : [];
+}
+
 /** A lookup result as the tool returns it, or null. */
 export function extractLookup(payload: unknown): LookupPayload | null {
     const candidate = payload as Partial<LookupPayload> | null;

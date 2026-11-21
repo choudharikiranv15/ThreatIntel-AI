@@ -153,11 +153,22 @@ const NOTES = [
     "VirusTotal counts are engine verdicts: one or two detections among many engines are often false positives, and no detections is not proof of safety. Page titles are written by the site and untrusted.",
 ];
 
+/** How one lookup runs inside a larger job, such as an alert triage. */
+export type LookupRun = {
+    /** Shared by every lookup of one job, so the job counts once against the per-person limit. */
+    lookupId?: string;
+    /** False when the caller has already applied the per-person limit to the whole job. */
+    checkUserLimit?: boolean;
+    /** Only these services, of those enabled. */
+    sources?: LookupSourceId[];
+};
+
 export async function runLookup(
     rawIndicator: unknown,
     requestedBy: string,
     settings: LookupSettings,
     deps: LookupDeps = {},
+    run: LookupRun = {},
 ): Promise<LookupPayload | IndicatorRejection | { error: "rate_limited"; message: string }> {
     const fetchSource = deps.fetchSource ?? lookupSource;
     const data = deps.store ?? store;
@@ -168,11 +179,11 @@ export async function runLookup(
         return indicator;
     }
 
-    if ((await data.lookupsLastHour(requestedBy)) >= settings.perUserPerHour) {
+    if (run.checkUserLimit !== false && (await data.lookupsLastHour(requestedBy)) >= settings.perUserPerHour) {
         return { error: "rate_limited", message: `Lookup limit reached (${settings.perUserPerHour} per hour). Try again later.` };
     }
 
-    const applicable = settings.sources.filter((source) => COVERS[source].includes(indicator.type));
+    const applicable = settings.sources.filter((source) => COVERS[source].includes(indicator.type) && (!run.sources || run.sources.includes(source)));
 
     const results = await Promise.all(applicable.map(async (source): Promise<SourceResult> => {
         const cached = await data.cachedResult(indicator, source, settings.cacheHours);
@@ -195,7 +206,7 @@ export async function runLookup(
         return fetchSource(source, indicator, settings.options);
     }));
 
-    await data.recordLookup(randomUUID(), indicator, requestedBy, results);
+    await data.recordLookup(run.lookupId ?? randomUUID(), indicator, requestedBy, results);
 
     const cachedNote = results.some((result) => result.cached)
         ? ["Some answers are reused from an earlier lookup; each source's checkedAt says when it was retrieved."]

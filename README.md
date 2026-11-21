@@ -25,6 +25,8 @@ It is tuned for a SOC protecting a **Bio/Pharma** organisation: lab systems, man
 
 **Threat feed.** Every three hours, the assistant reviews new advisories and research and posts only what is relevant and worth acting on, prioritised for the organisation. Each post names the threat, the affected products and platforms, a link to the original article, and any indicators of compromise to hunt for. When nothing new is worth posting, it says so and shares a short security concept instead.
 
+**Alert triage.** Paste a whole alert, log excerpt, or email and every IP address, domain, URL, and file hash in it is checked at once, defanged or not. Results come back ranked by what the sources reported, with the ones to look at first on top, links to each record, and a clear list of what was not checked and why. Internal hostnames and private addresses are never sent outside.
+
 **Indicator checks.** Paste an IP address, domain, URL, or file hash, defanged or not, and get its reputation from established threat intelligence services: whether it has been reported as malicious, whether it is a known benign service, and what is exposed on it. "No reports" is always reported as no reports, never as "safe".
 
 **Email header analysis.** Paste the headers of a suspicious email to see whether it passed sender authentication, whether the sender, reply address, and display name are consistent, which server it came from, and what the sender's domain publishes. This is useful for phishing and business email compromise triage.
@@ -35,6 +37,7 @@ Mention the assistant in your team's channel and ask in plain language:
 
 - `@ThreatIntel AI tell me about CVE-2024-3400`
 - `@ThreatIntel AI has anything changed for CVE-2024-3400 since we last checked?`
+- `@ThreatIntel AI triage this alert` (paste it, or attach it as a text file)
 - `@ThreatIntel AI check 185.220.101[.]47`
 - `@ThreatIntel AI look up hxxps://login-paypa1[.]com/verify`
 - `@ThreatIntel AI analyse these email headers` (paste them or attach them as a text file)

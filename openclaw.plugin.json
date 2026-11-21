@@ -2,7 +2,7 @@
   "id": "threatintel-ai-engine",
   "name": "ThreatIntel AI Engine",
   "description": "Evidence-first threat intelligence investigation engine. Supports CVE investigations using NVD, CISA KEV, Red Hat Security Data API, and OSV, with source correlation and comparison over time. Provides vendor-specific product impact assessments and retrieval of previously persisted investigation context.",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "configSchema": {
     "type": "object",
     "properties": {
@@ -73,6 +73,20 @@
       "greynoiseApiKey": {
         "type": "string",
         "description": "Optional GreyNoise API key; the community API works without one at a lower limit."
+      },
+      "triageMaxIndicators": {
+        "type": "integer",
+        "description": "Most indicators one alert triage checks.",
+        "default": 25,
+        "minimum": 1,
+        "maximum": 50
+      },
+      "triageIgnoreDomains": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Extra domains alert triage treats as the SOC's own infrastructure and never sends, such as the company domain."
       },
       "mxtoolboxApiKey": {
         "type": "string",
@@ -293,6 +307,7 @@
       "threatintel_feed_status",
       "threatintel_feed_run_now",
       "threatintel_lookup_indicator",
+      "threatintel_triage_alert",
       "threatintel_analyze_email_headers"
     ]
   },
