@@ -38,6 +38,8 @@ import {
   registerDisclosureGuard,
 } from "./verification/disclosure-guard.js";
 
+import { registerPrivacy, type PrivacyPluginConfig } from "./privacy/index.js";
+
 import {
   rememberVendorRows,
 } from "./verification/evidence-cache.js";
@@ -235,6 +237,26 @@ const entry = defineToolPlugin({
 
     greynoiseApiKey: Type.Optional(
       Type.String({ description: "Optional GreyNoise API key; the community API works without one at a lower limit." }),
+    ),
+
+    privacyGatewayEnabled: Type.Optional(
+      Type.Boolean({ description: "Run the local privacy gateway that redacts PII from every request to the AI provider. Point the model provider's baseUrl at it.", default: false }),
+    ),
+
+    privacyGatewayPort: Type.Optional(
+      Type.Integer({ description: "Loopback port of the privacy gateway.", default: 18790, minimum: 1024, maximum: 65535 }),
+    ),
+
+    privacyGatewayUpstreams: Type.Optional(
+      Type.Record(Type.String(), Type.String(), { description: "Extra provider base URLs (https only) the gateway may forward to, by name; openrouter, gemini, groq, cerebras, mistral and sarvam are built in." }),
+    ),
+
+    piiTerms: Type.Optional(
+      Type.Array(Type.String(), { description: "Names and other terms always replaced before anything reaches the AI provider, such as team members' names." }),
+    ),
+
+    piiRestoreInReplies: Type.Optional(
+      Type.Boolean({ description: "Put the real values back in replies posted to the chat the data came from.", default: true }),
     ),
 
     triageMaxIndicators: Type.Optional(
@@ -793,7 +815,9 @@ const registerTools = entry.register;
 
 entry.register = (api) => {
   registerTools(api);
-  registerAnswerGate(api);
+  // Redacts what the AI provider sees; real values come back only in replies.
+  const restore = registerPrivacy(api, (api.pluginConfig ?? {}) as PrivacyPluginConfig);
+  registerAnswerGate(api, { transformOutbound: restore });
   // Registered last and runs last, so nothing internal reaches chat.
   registerDisclosureGuard(api);
 

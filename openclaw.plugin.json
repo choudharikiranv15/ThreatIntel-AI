@@ -2,7 +2,7 @@
   "id": "threatintel-ai-engine",
   "name": "ThreatIntel AI Engine",
   "description": "Evidence-first threat intelligence investigation engine. Supports CVE investigations using NVD, CISA KEV, Red Hat Security Data API, and OSV, with source correlation and comparison over time. Provides vendor-specific product impact assessments and retrieval of previously persisted investigation context.",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "configSchema": {
     "type": "object",
     "properties": {
@@ -73,6 +73,39 @@
       "greynoiseApiKey": {
         "type": "string",
         "description": "Optional GreyNoise API key; the community API works without one at a lower limit."
+      },
+      "privacyGatewayEnabled": {
+        "type": "boolean",
+        "description": "Run the local privacy gateway that redacts PII from every request to the AI provider. Point the model provider's baseUrl at it.",
+        "default": false
+      },
+      "privacyGatewayPort": {
+        "type": "integer",
+        "description": "Loopback port of the privacy gateway.",
+        "default": 18790,
+        "minimum": 1024,
+        "maximum": 65535
+      },
+      "privacyGatewayUpstreams": {
+        "type": "object",
+        "patternProperties": {
+          "^.*$": {
+            "type": "string"
+          }
+        },
+        "description": "Extra provider base URLs (https only) the gateway may forward to, by name; openrouter, gemini, groq, cerebras, mistral and sarvam are built in."
+      },
+      "piiTerms": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Names and other terms always replaced before anything reaches the AI provider, such as team members' names."
+      },
+      "piiRestoreInReplies": {
+        "type": "boolean",
+        "description": "Put the real values back in replies posted to the chat the data came from.",
+        "default": true
       },
       "triageMaxIndicators": {
         "type": "integer",

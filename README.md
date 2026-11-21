@@ -49,7 +49,7 @@ Threat feed posts and watchlist alerts arrive in their own channels automaticall
 - **Evidence first.** Facts come from checked sources, never from the AI's memory. Each answer shows where a fact came from and when.
 - **No false reassurance.** An indicator with no reports is "not reported", not "clean". An email that passes authentication is shown to come from its domain, not declared legitimate.
 - **Checked before sending.** Answers that contradict the evidence, such as a misquoted score or a result from a source that was not checked, are corrected or flagged before they reach you.
-- **Privacy by default.** Private and internal addresses are never sent outside the organisation. Email recipients are never shown, and pasted email headers are not stored.
+- **Privacy by default.** Private and internal addresses are never sent outside the organisation. Email recipients are never shown, and pasted email headers are not stored. Names, accounts, email addresses, internal hosts and phone numbers in what you paste are replaced with placeholders before anything reaches the AI model, and passwords or keys are removed entirely; the real values appear only in the reply in your own channel.
 - **Confidential by design.** The assistant does not discuss how it is built or configured, and it never asks for passwords or API keys. Do not paste credentials into chat.
 
 ## Access

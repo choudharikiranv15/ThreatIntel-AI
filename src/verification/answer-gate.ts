@@ -81,7 +81,20 @@ function extractView(payload: unknown): InvestigationView | null {
  * The finalize check requires
  * plugins.entries.threatintel-ai-engine.hooks.allowConversationAccess.
  */
-export function registerAnswerGate(api: OpenClawPluginApi): void {
+export function registerAnswerGate(
+    api: OpenClawPluginApi,
+    options: {
+        /** Applied to every outgoing reply after the evidence check, such as putting redacted values back. */
+        transformOutbound?: (text: string) => string;
+    } = {},
+): void {
+    const finish = (original: string, warned: string | undefined): string | undefined => {
+        const base = warned ?? original;
+        const out = options.transformOutbound ? options.transformOutbound(base) : base;
+
+        return out !== original ? out : undefined;
+    };
+
     const sessions = new Map<string, SessionState>();
 
     function withWarning(
@@ -214,7 +227,7 @@ export function registerAnswerGate(api: OpenClawPluginApi): void {
 
     // Delivery paths differ by channel; the prefix check stops a double warning.
     api.on("message_sending", (event, context) => {
-        const content = withWarning(event.content, context.sessionKey);
+        const content = finish(event.content, withWarning(event.content, context.sessionKey));
 
         return content ? { content } : undefined;
     });
@@ -226,13 +239,13 @@ export function registerAnswerGate(api: OpenClawPluginApi): void {
             return undefined;
         }
 
-        const warned = withWarning(
+        const out = finish(
             text,
-            event.sessionKey ?? context.sessionKey,
+            withWarning(text, event.sessionKey ?? context.sessionKey),
         );
 
-        return warned
-            ? { payload: { ...event.payload, text: warned } }
+        return out
+            ? { payload: { ...event.payload, text: out } }
             : undefined;
     });
 }
