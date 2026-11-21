@@ -454,7 +454,8 @@ const entry = defineToolPlugin({
       description: [
         "Investigate a cybersecurity target using authoritative threat intelligence sources.",
         "Currently supports CVE identifiers.",
-        "Uses NVD (primary vulnerability data), CISA KEV (known exploitation), Red Hat Security Data API (vendor product impact), and OSV (ecosystem package fixes).",
+        "Uses NVD (primary vulnerability data), CISA KEV (known exploitation), Red Hat Security Data API (vendor product impact), OSV (ecosystem package fixes), and FIRST EPSS (estimated likelihood of exploitation).",
+        "Report summary.exploitPrediction as FIRST EPSS's estimate with its score date, for example 'EPSS estimates a 23.4% chance of exploitation in the next 30 days (scored 2026-11-21)'. It is a model's prediction, never evidence that exploitation happened: only CISA KEV establishes that. When it is null, say EPSS has no score for the CVE.",
         "Check persisted investigation context before performing a fresh investigation.",
         "Reuse prior results only when the deterministic freshness and completeness policy allows reuse.",
         "Set forceRefresh=true when the analyst explicitly requests fresh evidence.",

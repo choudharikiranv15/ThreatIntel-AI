@@ -7,6 +7,7 @@ import type {
     EvidenceReference,
     InvestigationResult,
     KevStatus,
+    ExploitPrediction,
     PackageFix,
     VendorImpactAssessment,
 } from "./types.js";
@@ -223,6 +224,8 @@ export type InvestigationView = {
             statusCounts: Record<string, number>;
         };
         packageFixes: Capped<PackageFix>;
+        /** FIRST EPSS estimate; null when EPSS has no score; absent when EPSS was not checked. */
+        exploitPrediction?: ExploitPrediction | null;
     };
     assessment: Capped<ViewStatement>;
     providerResults: {
@@ -432,6 +435,7 @@ function render(source: ViewSource, tier: Tier): InvestigationView {
                 statusCounts: statusCounts(summary.vendorImpact ?? []),
             },
             packageFixes: capped(summary.packageFixes ?? [], tier.items),
+            ...(summary.exploitPrediction !== undefined ? { exploitPrediction: summary.exploitPrediction } : {}),
         },
         assessment: capped(
             (summary.assessment ?? []).map((item) => ({

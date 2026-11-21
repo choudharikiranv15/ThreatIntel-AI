@@ -204,6 +204,16 @@ function diffSummaries(
     );
   }
 
+  // The band only: the score moves a little every day, and that is not news.
+  if (before.exploitPrediction !== undefined && after.exploitPrediction !== undefined) {
+    add(
+      "exploitPrediction.band",
+      "EPSS",
+      before.exploitPrediction?.band ?? null,
+      after.exploitPrediction?.band ?? null,
+    );
+  }
+
   return differences;
 }
 

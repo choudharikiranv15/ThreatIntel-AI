@@ -28,4 +28,11 @@ export type InvestigationProviders = {
      * saved before it was added, which is different from it having no record.
      */
     osv?: OsvProvider | null;
+
+    /** Enrichment, like OSV: null or unset means EPSS was not checked. */
+    epss?: EpssProvider | null;
 };
+
+export type EpssProvider = (
+    cveId: string,
+) => Promise<ProviderResult>;

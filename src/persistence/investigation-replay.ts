@@ -110,6 +110,10 @@ export function rederiveContext(
                 osv: storedResult(context, "OSV")
                     ? storedProvider(context, "OSV")
                     : null,
+                // Investigations saved before EPSS was added did not check it.
+                epss: storedResult(context, "EPSS")
+                    ? storedProvider(context, "EPSS")
+                    : null,
             },
         },
     );

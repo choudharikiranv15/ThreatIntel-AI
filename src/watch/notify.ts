@@ -21,6 +21,7 @@ const SOURCE_NAMES: Record<string, string> = {
     CISA_KEV: "CISA KEV",
     REDHAT: "Red Hat",
     OSV: "OSV",
+    EPSS: "FIRST EPSS",
 };
 
 /** Neutralises mentions, markdown, and links in untrusted text. */

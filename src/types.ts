@@ -2,7 +2,8 @@ export type SourceId =
   | "NVD"
   | "CISA_KEV"
   | "REDHAT"
-  | "OSV";
+  | "OSV"
+  | "EPSS";
 
 export type SourceType =
   | "primary"
@@ -237,6 +238,18 @@ export type Correlation = {
   };
 };
 
+/** FIRST EPSS: a model's estimate of exploitation in the next 30 days, not an observation. */
+export type ExploitPrediction = {
+  /** Probability, 0 to 1. */
+  probability: number;
+  /** Share of scored CVEs with a lower probability, 0 to 1. */
+  percentile: number;
+  scoreDate: string;
+  /** low under 10%, elevated 10 to 50%, high 50% and above. */
+  band: "low" | "elevated" | "high";
+  evidenceId: string;
+};
+
 export type PackageFix = {
   ecosystem: string;
   package: string;
@@ -274,6 +287,9 @@ export type InvestigationSummary = {
   correlations?: Correlation[];
 
   packageFixes?: PackageFix[];
+
+  /** Absent for investigations saved before EPSS was checked; null when EPSS has no score. */
+  exploitPrediction?: ExploitPrediction | null;
 
   assessment?: AssessmentStatement[];
 

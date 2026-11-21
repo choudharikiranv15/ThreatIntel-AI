@@ -22,6 +22,7 @@ import {
 import {
   fetchOsvRecord,
 } from "./sources/osv.js";
+import { fetchEpssRecord, predictionFrom } from "./sources/epss.js";
 
 import {
   buildAssessment,
@@ -1449,6 +1450,19 @@ export async function investigateCve(
           },
         ),
 
+    epss: config.providers
+      ? null
+      : (cveId) =>
+        fetchEpssRecord(
+          cveId,
+          {
+            timeoutMs:
+              config.requestTimeoutMs,
+            signal: config.signal,
+            retry: config.retry,
+          },
+        ),
+
     ...config.providers,
   };
 
@@ -1468,6 +1482,7 @@ export async function investigateCve(
     cisaSettled,
     redhatSettled,
     osvSettled,
+    epssSettled,
   ] =
     await Promise.allSettled([
       providers.nvd(cveId),
@@ -1475,6 +1490,9 @@ export async function investigateCve(
       providers.redhat(cveId),
       providers.osv
         ? providers.osv(cveId)
+        : Promise.resolve(null),
+      providers.epss
+        ? providers.epss(cveId)
         : Promise.resolve(null),
     ]);
 
@@ -1577,6 +1595,32 @@ export async function investigateCve(
 
   if (osvProviderResult) {
     providerResults.push(osvProviderResult);
+  }
+
+  let epssProviderResult: ProviderResult | null = null;
+
+  if (epssSettled.status === "rejected") {
+    epssProviderResult = {
+      provider: "EPSS",
+      status: "error",
+      evidence: null,
+      error:
+        epssSettled.reason instanceof Error
+          ? epssSettled.reason.message
+          : String(epssSettled.reason),
+      checkedAt:
+        new Date().toISOString(),
+    };
+  } else if (epssSettled.value !== null) {
+    epssProviderResult =
+      normalizeInvalidProviderResult(
+        epssSettled.value,
+        "EPSS",
+      );
+  }
+
+  if (epssProviderResult) {
+    providerResults.push(epssProviderResult);
   }
 
   /* ----------------------------------------------------------------------- */
@@ -1918,6 +1962,40 @@ export async function investigateCve(
   }
 
   /* ----------------------------------------------------------------------- */
+  /* EPSS                                                                     */
+  /* ----------------------------------------------------------------------- */
+
+  let exploitPrediction: InvestigationResult["summary"]["exploitPrediction"];
+
+  if (epssProviderResult) {
+    const epssFailure = providerFailureLimitation(epssProviderResult);
+
+    // Enrichment, like OSV: visible, but never blocking reuse of complete core evidence.
+    if (epssFailure) {
+      enrichmentLimitations.push(epssFailure);
+    }
+
+    if (epssProviderResult.status === "success" && epssProviderResult.evidence) {
+      const epssEvidence = assignEvidenceId(cveId, epssProviderResult.evidence);
+
+      evidence.push(epssEvidence);
+      exploitPrediction = predictionFrom(epssEvidence);
+
+      if (exploitPrediction) {
+        addConfirmedFact(
+          confirmedFacts,
+          factProvenance,
+          `FIRST EPSS estimates a ${(exploitPrediction.probability * 100).toFixed(1)}% probability of exploitation in the next 30 days, higher than ${(exploitPrediction.percentile * 100).toFixed(1)}% of scored CVEs (scored ${exploitPrediction.scoreDate}). This is a model estimate, not observed exploitation.`,
+          epssEvidence.id,
+          "epss",
+        );
+      }
+    } else if (epssProviderResult.status === "observed_absence") {
+      exploitPrediction = null;
+    }
+  }
+
+  /* ----------------------------------------------------------------------- */
   /* Summary                                                                  */
   /* ----------------------------------------------------------------------- */
 
@@ -1950,6 +2028,8 @@ export async function investigateCve(
     vendorImpact,
 
     packageFixes,
+
+    ...(exploitPrediction !== undefined ? { exploitPrediction } : {}),
 
     enrichmentLimitations,
 

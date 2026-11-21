@@ -19,9 +19,9 @@ It is tuned for a SOC protecting a **Bio/Pharma** organisation: lab systems, man
 
 ## What it helps with
 
-**Vulnerability questions.** Ask about any CVE and get its severity, whether it is known to be exploited, which products and versions are affected, and where fixes are available, with the source and date of every fact.
+**Vulnerability questions.** Ask about any CVE and get its severity, whether it is known to be exploited, how likely it is to be exploited in the next 30 days according to an industry-standard prediction model, which products and versions are affected, and where fixes are available, with the source and date of every fact. A prediction is always labelled as an estimate, never as proof of exploitation.
 
-**Watchlist.** Choose the vulnerabilities that matter to your environment. The assistant keeps checking them and alerts the team when something meaningful changes, such as a new exploitation report, a severity change, or a newly released fix. It stays quiet otherwise.
+**Watchlist.** Choose the vulnerabilities that matter to your environment. The assistant keeps checking them and alerts the team when something meaningful changes, such as a new exploitation report, a severity change, a newly released fix, or a jump in its predicted likelihood of exploitation. It stays quiet otherwise.
 
 **Threat feed.** Every three hours, the assistant reviews new advisories and research and posts only what is relevant and worth acting on, prioritised for the organisation. Each post names the threat, the affected products and platforms, a link to the original article, and any indicators of compromise to hunt for. When nothing new is worth posting, it says so and shares a short security concept instead.
 

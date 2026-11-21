@@ -69,6 +69,15 @@ function alertExplanation(change: InvestigationChange): string | null {
         case "affectedVersions":
             return "NVD changed the affected products or version ranges.";
 
+        case "exploitPrediction.band": {
+            const rank = { low: 0, elevated: 1, high: 2 } as Record<string, number>;
+
+            // Only a rise between scored bands; a first score or a fall is not actionable.
+            return typeof before === "string" && typeof after === "string" && rank[after] > rank[before]
+                ? `FIRST EPSS now rates exploitation in the next 30 days as ${after} (was ${before}).`
+                : null;
+        }
+
         case "packageFixes":
             return Array.isArray(after) && after.length > 0
                 ? "A reviewed OSV advisory lists new fixed versions."
