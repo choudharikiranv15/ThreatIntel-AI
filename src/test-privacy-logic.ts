@@ -10,7 +10,7 @@ import path from "node:path";
 
 import { analyseHeaders, type HeaderAnalysis } from "./email/headers.js";
 import { createGatewayHandler, upstreamsFrom } from "./privacy/gateway.js";
-import { privacySettings, registerPrivacy } from "./privacy/index.js";
+import { privacySettings, processRedactor, registerPrivacy } from "./privacy/index.js";
 import { PLACEHOLDER, Redactor, redactRequestBody } from "./privacy/redact.js";
 import { extractIndicators } from "./triage/extract.js";
 import { registerAnswerGate } from "./verification/answer-gate.js";
@@ -206,6 +206,17 @@ async function testReplies(): Promise<void> {
     );
 
     assert(restore && services[0]?.id === "threatintel-privacy-gateway", "enabling starts the gateway and returns the restore step");
+
+    /* OpenClaw may register the plugin more than once in a process: every registration shares one table. */
+    const fakeApi = (warnings: string[] = []) => ({ registerService: () => undefined, on: () => undefined, logger: { warn: (m: string) => warnings.push(m) } }) as never;
+    const first = processRedactor(["Kiran Choudhari"]);
+    const warnings: string[] = [];
+    const secondRestore = registerPrivacy(fakeApi(warnings), { privacyGatewayEnabled: true, piiTerms: ["Kiran Choudhari"] })!;
+    const issuedByGateway = first.redact(String.raw`user CORP\j.doe reported by Kiran Choudhari`);
+
+    assert(processRedactor([]) === first, "the redactor is one per process");
+    assert(secondRestore(issuedByGateway) === String.raw`user CORP\j.doe reported by Kiran Choudhari` && warnings.length === 0, "a later registration restores placeholders the gateway issued");
+    assert(secondRestore(`seen ${new Redactor().placeholder("USER", "x")}`).includes("PII_USER_") && warnings.some((w) => /1 placeholder\(s\) in a reply could not be restored/.test(w) && !/x/.test(w.replace(/placeholder|reply|could|not|restored/g, ""))), "an unresolvable placeholder is logged by count, never by value");
 
     /* Tool calls: this plugin's tools run on the gateway and get real values back; internet-facing tools do not. */
     const toolCall = privacyHooks.get("before_tool_call")!;

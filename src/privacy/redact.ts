@@ -70,13 +70,23 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 export class Redactor {
     private readonly key: Buffer;
     private readonly originals = new Map<string, string>();
-    private readonly terms: RegExp | null;
+    private terms: RegExp | null = null;
 
     constructor(options: { terms?: string[]; key?: Buffer } = {}) {
         this.key = options.key ?? randomBytes(32);
-        const terms = (options.terms ?? []).map((t) => t.trim()).filter((t) => t.length >= 3);
+        this.setTerms(options.terms ?? []);
+    }
+
+    /** Replaces the configured names; placeholders already issued stay valid. */
+    setTerms(list: string[]): void {
+        const terms = list.map((t) => t.trim()).filter((t) => t.length >= 3);
 
         this.terms = terms.length ? new RegExp(`\\b(?:${terms.sort((a, b) => b.length - a.length).map(escapeRe).join("|")})\\b`, "gi") : null;
+    }
+
+    /** Placeholders in a text that this redactor did not issue. */
+    unknownPlaceholders(text: string): number {
+        return (text.match(PLACEHOLDER) ?? []).filter((token) => !this.originals.has(token)).length;
     }
 
     /** The placeholder for a value; the same value always gets the same one. */

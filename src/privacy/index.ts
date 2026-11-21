@@ -54,8 +54,31 @@ function restoreParams(value: unknown, redactor: Redactor): unknown {
  */
 const LOCAL_TOOLS = /^threatintel_/;
 
+/*
+ * One redactor per process. OpenClaw may run the plugin's register() more than
+ * once in a process (discovery, the full runtime, config reloads), and each run
+ * must see the same placeholder table: otherwise the gateway fills one table
+ * while the reply hooks look in another and cannot put real values back.
+ */
+const SHARED_REDACTOR = Symbol.for("threatintel-ai.privacy.redactor");
+
+export function processRedactor(terms: string[]): Redactor {
+    const holder = globalThis as unknown as Record<symbol, Redactor | undefined>;
+    const existing = holder[SHARED_REDACTOR];
+
+    if (existing) {
+        existing.setTerms(terms);
+        return existing;
+    }
+
+    const created = new Redactor({ terms });
+
+    holder[SHARED_REDACTOR] = created;
+    return created;
+}
+
 export function registerPrivacy(
-    api: Pick<OpenClawPluginApi, "registerService" | "on">,
+    api: Pick<OpenClawPluginApi, "registerService" | "on"> & { logger?: { warn: (message: string) => void; info?: (message: string) => void } },
     config: PrivacyPluginConfig,
     shared?: Redactor,
 ): ((text: string) => string) | undefined {
@@ -65,7 +88,7 @@ export function registerPrivacy(
         return undefined;
     }
 
-    const redactor = shared ?? new Redactor({ terms: settings.terms });
+    const redactor = shared ?? processRedactor(settings.terms);
 
     api.registerService(createPrivacyGatewayService(settings, redactor));
 
@@ -90,6 +113,24 @@ export function registerPrivacy(
     return (text) => {
         PLACEHOLDER.lastIndex = 0;
 
-        return PLACEHOLDER.test(text) ? redactor.restore(text) : text;
+        if (!PLACEHOLDER.test(text)) {
+            return text;
+        }
+
+        const unknown = redactor.unknownPlaceholders(text);
+
+        if (unknown > 0) {
+            // Counts only. Expected after a restart for older conversations; otherwise a sign of a second table.
+            api.logger?.warn(`threatintel privacy: ${unknown} placeholder(s) in a reply could not be restored`);
+        }
+
+        PLACEHOLDER.lastIndex = 0;
+        const total = (text.match(PLACEHOLDER) ?? []).length;
+
+        if (total > unknown) {
+            api.logger?.info?.(`threatintel privacy: restored ${total - unknown} placeholder(s) in a reply`);
+        }
+
+        return redactor.restore(text);
     };
 }
